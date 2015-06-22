@@ -28,47 +28,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_SMART_MAP_HPP__
-#define __OPENEFW_SMART_MAP_HPP__
+#ifndef __OPENEFW_VALUE_MAP_HPP__
+#define __OPENEFW_VALUE_MAP_HPP__
 
 #include "ExtendedMap.hpp"
 
 namespace OpenEFW
 {
-	template<typename I, typename T> class SmartMap : public ExtendedMap<I, T, T*, shared_ptr<T>>{
-		using This = SmartMap<I,T>;
-		using Super = ExtendedMap<I, T, T*, shared_ptr<T>>;
-
+	template<typename I, typename T> class ValueMap : public ExtendedMap<I, T, T, T>
+	{
 	public:
-		using typename Super::Id;
-		using typename Super::Type;
-		using typename Super::Value;
+		using This = ValueMap<I, T>;
+		using Super = ExtendedMap<I, T, T, T>;
 
-		virtual bool add(Id id, const Type& obj)
-		{
-			if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
-			return __super::add(id, obj);
-		};
-
-		virtual bool replace(Id id, const Type& obj)
-		{
-			if (!obj) OpenEFW_EXCEPTION(This, "replace(NULL)");
-			return __super::replace(id, obj);
-		};
-
-		virtual bool del(Id id) { return __super::del(id); };
-
-		virtual bool del(const Type& obj)
-		{
-			if (!obj) OpenEFW_EXCEPTION(This, "remove(NULL)");
-			return __super::del(obj);
-		};
+		using Id = typename Super::Id;
+		using Type = typename Super::Type;
+		using Value = typename Super::Value;
 
 	protected:
 		virtual Value createValue() { return Value(); };
 		virtual Value createValue(const Type& obj) { return Value(obj); };
-		virtual Type getValue(const Value& v) { return v.get(); };
-		virtual void replaceValue(Value& v, const Type& obj) { v.reset(obj); };
+		virtual Type getValue(const Value& v) { return v; };
+		virtual void replaceValue(Value& v, const Type& obj) { v = obj; };
 	};
 };
 

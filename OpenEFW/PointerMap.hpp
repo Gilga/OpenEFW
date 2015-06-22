@@ -28,47 +28,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_SMART_MAP_HPP__
-#define __OPENEFW_SMART_MAP_HPP__
+#ifndef __OPENEFW_POINTER_MAP_HPP__
+#define __OPENEFW_POINTER_MAP_HPP__
 
-#include "ExtendedMap.hpp"
+#include "SmartMap.hpp"
 
 namespace OpenEFW
 {
-	template<typename I, typename T> class SmartMap : public ExtendedMap<I, T, T*, shared_ptr<T>>{
-		using This = SmartMap<I,T>;
-		using Super = ExtendedMap<I, T, T*, shared_ptr<T>>;
+	template<typename I, typename T> class PointerMap : public SmartMap<I, T>{
+		using This = PointerMap<I, T>;
+		using Super = SmartMap<I, T>;
 
 	public:
 		using typename Super::Id;
 		using typename Super::Type;
 		using typename Super::Value;
 
-		virtual bool add(Id id, const Type& obj)
-		{
-			if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
-			return __super::add(id, obj);
-		};
-
-		virtual bool replace(Id id, const Type& obj)
-		{
-			if (!obj) OpenEFW_EXCEPTION(This, "replace(NULL)");
-			return __super::replace(id, obj);
-		};
-
-		virtual bool del(Id id) { return __super::del(id); };
-
-		virtual bool del(const Type& obj)
-		{
-			if (!obj) OpenEFW_EXCEPTION(This, "remove(NULL)");
-			return __super::del(obj);
-		};
-
 	protected:
-		virtual Value createValue() { return Value(); };
-		virtual Value createValue(const Type& obj) { return Value(obj); };
-		virtual Type getValue(const Value& v) { return v.get(); };
-		virtual void replaceValue(Value& v, const Type& obj) { v.reset(obj); };
+		virtual Value createValue(const Type& obj) { return Value(obj, [](T*){}); };
 	};
 };
 

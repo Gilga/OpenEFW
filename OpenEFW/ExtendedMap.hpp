@@ -56,9 +56,10 @@ namespace OpenEFW
 	protected:
 		Map m_map;
 
-		virtual Value createValue() { return Value(); };
+		virtual Value createValue() = 0;
+		virtual Value createValue(const Type& obj) = 0;
 		virtual Type getValue(const Value& v) = 0;
-		virtual void setValue(Value& v, const Type& obj) = 0;
+		virtual void replaceValue(Value& v, const Type& obj) = 0;
 
 	public:
 		ExtendedMap() {}
@@ -80,8 +81,8 @@ namespace OpenEFW
 
 		virtual bool add(Id id, const Type& obj)
 		{
-			//if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
-			if (!has(id)) { m_map.insert(Pair(id, Value(obj))); return true; }
+			if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
+			if (!has(id)) { m_map.insert(Pair(id, createValue(obj))); return true; }
 			return false; // failed, because it already exists
 		};
 
@@ -89,7 +90,7 @@ namespace OpenEFW
 		{
 			//if (!obj) OpenEFW_EXCEPTION(This, "replace(NULL)");
 			auto it = m_map.find(id);
-			if (it != m_map.end()) { setValue(it->second, obj); return true; }
+			if (it != m_map.end()) { replaceValue(it->second, obj); return true; }
 			return false; // failed, because could not found
 		};
 
@@ -109,7 +110,7 @@ namespace OpenEFW
 
 			bool found = loop([&](Id name, Type e) {
 				bool found = (index == id);
-				if (found) setValue(lib,e); else ++index;
+				if (found) replaceValue(lib, e); else ++index;
 				return found;
 			});
 
@@ -150,18 +151,6 @@ namespace OpenEFW
 			for (auto & e : m_map) if (f(e.first, getValue(e.second))) return true; // break loop
 			return false;
 		}
-	};
-
-	template<typename I, typename T> class ExtendedMap<I, T> : public ExtendedMap<I, T, T, T>
-	{
-	public:
-		using Id = I;
-		using Type = T;
-		using Value = T;
-
-	protected:
-		virtual Type getValue(const Value& v) { return v; };
-		virtual void setValue(Value& v, const Type& obj) { v = obj; };
 	};
 };
 

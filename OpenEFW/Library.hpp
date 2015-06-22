@@ -76,7 +76,7 @@ namespace OpenEFW
 		template<typename R = void, typename ...A> inline R call(const string &name, A... args) {
 			auto f = function<R(A...)>(name);
 			if (!f) OpenEFW_EXCEPTION(R(A...), "function " + name + " not found in lib " + type_name());
-			return (*f)(::std::forward<A>(args)...);
+			return (*f)(forward<A>(args)...);
 		};
 
 		template<typename T> Library<T>* get()

@@ -32,7 +32,7 @@
 #define __OPENEFW_LISTEN_MANAGER_HPP__
 
 #include "BaseClass.hpp"
-#include "SmartMap.hpp"
+#include "PointerMap.hpp"
 
 namespace OpenEFW
 {
@@ -40,7 +40,10 @@ namespace OpenEFW
 	{
 		using ID = ::std::size_t;
 		using NAME = ::std::string;
-		using Listeners = SmartMap<NAME, Listener>;
+
+		// Be careful, dont destroy listeners here,
+		// they must be stored and destroyed elsewhere
+		using Listeners = PointerMap<NAME, Listener>;
 
 		Listeners list;
 
