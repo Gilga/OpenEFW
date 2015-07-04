@@ -28,42 +28,56 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_EXTENDEDCLASS_HPP__
-#define __OPENEFW_EXTENDEDCLASS_HPP__
+#ifndef __OPENEFW_UNBOUNDCLASS_HPP__
+#define __OPENEFW_UNBOUNDCLASS_HPP__
 
-#include "BaseClass.hpp"
+#include "Delegate.hpp"
 #include "macros/exception.hpp"
 
 namespace OpenEFW
 {
-	template<typename T> class ExtendedClass : public BaseClass {
-	public:
-		using This = ExtendedClass<T>;
-		using Values = T;
+	template<typename C> struct UnboundClass {
+		template<typename ...> struct StaticFunction;
+		template<typename T, typename ...A> struct StaticFunction<T(A...)> { using Type = Delegate<T(C*, A...)>; };
+		template<typename T> using Function = typename StaticFunction<T>::Type;
 
-		template<typename ...> struct ExtendedClassFunction;
-		template<typename T, typename ...A> struct ExtendedClassFunction<T(A...)> { using Type = Delegate<T(Values&, A...)>; };
-
-		template<typename T> using Function = typename ExtendedClassFunction<T>::Type;
-
-		template<typename I, typename T> inline Function<T>& function() {
+	protected:
+		template<typename I, typename T> static inline Function<T>& function() {
 			static Function<T> func;
 			return func;
 		};
 
-		template<typename I, typename R = void, typename ...A> inline R call(A... args) {
-			auto f = function<I,R(A...)>();
-			if (!f) OpenEFW_EXCEPTION(I(R,A...), "function is empty in ExtendedClass " + str());
-			return (f)(values, forward<A>(args)...);
-		};
+	public:
+		template<typename I = void> struct F
+		{
+		protected:
+			template<typename T> static inline string type() {
+				static auto str = TypeInfo::Get<I>::str() + "::" + TypeInfo::Get<T>::str();
+				return str;
+			};
 
-		virtual string str() {
-			if(type[0] == '?') setType<T>();
-			return "[" + type_name() + "]";
-		};
+		public:
+			template<typename T> static inline void set(Function<T> func) {
+				auto& current = function<I, T>();
+				if (current) OpenEFW_EXCEPTION(C, type<T>() + " function already exists");
+				current = func;
+			};
 
-	private:
-		Values values;
+			template<typename J = void, typename T> static inline enable_if_t<!is_same<I, J>::value> replace(Function<T> newfunc) {
+				auto& func = function<I, T>();
+				if (!func) OpenEFW_EXCEPTION(C, type<T>() + " function does not exists");
+				auto& oldfunc = function<J, T>();
+				oldfunc = func;
+				func = newfunc;
+			};
+
+			template<typename R = void, typename ...A> static inline R call(C* obj, A... args) {
+				if (!obj) OpenEFW_EXCEPTION(C, type<R(A...)>() + " object is null");
+				auto f = function<I,R(A...)>();
+				if (!f) OpenEFW_EXCEPTION(C, type<R(A...)>() + " function does not exists");
+				return (f)(obj, forward<A>(args)...);
+			};
+		};
 	};
 };
 

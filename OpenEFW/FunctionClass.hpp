@@ -31,15 +31,13 @@
 #ifndef __OPENEFW_FUNCTIONCLASS_HPP__
 #define __OPENEFW_FUNCTIONCLASS_HPP__
 
-#include "BaseClass.hpp"
 #include "FunctionList.hpp"
 
 namespace OpenEFW
 {
-	class FunctionClass : public BaseClass {
+	class FunctionClass {
 	public:
 		template<typename T> static FunctionClass create(){ FunctionClass f; f.setType<T>(); return f; };
-		static FunctionClass create(string type){ FunctionClass f; f.setType(type); return f; };
 
 		FunctionClass() = default;
 
@@ -65,14 +63,16 @@ namespace OpenEFW
 			return (*f)(forward<A>(args)...);
 		};
 
+		template<typename T> inline void setType(){ m_typeinfo.set<T>(); };
+
 		string getName() { return name; };
 		void setName(string name) { this->name = name; };
-		string str() { return "[" + type + "].[" + name + "]"; };
+		string str() { return "[" + m_typeinfo.type_name() + "].[" + name + "]"; };
 
 	private:
-
 		string name = "";
 		FunctionList list;
+		TypeInfo m_typeinfo;
 	};
 };
 

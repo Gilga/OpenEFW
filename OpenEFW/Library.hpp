@@ -31,16 +31,19 @@
 #ifndef __OPENEFW_LIBRARY_HPP__
 #define __OPENEFW_LIBRARY_HPP__
 
-#include "BaseClass.hpp"
+#include "UnknownClass.hpp"
 #include "VersionSet.hpp"
 #include "FunctionList.hpp"
+#include "ObjectGenerator.hpp"
 
 namespace OpenEFW
 {
 	template<typename ...A> class Library;
 
 	/*! A template class for libraries */
-	template<> class Library<> : public BaseClass {
+	template<> class Library<> : public UnknownClass {
+		OpenEFW_SetCurrentClass
+
 	public:
 		using version_t = size_t;
 
@@ -53,7 +56,7 @@ namespace OpenEFW
 		bool checkVersion(bool exceptionOnFail = false)  // check current version of library
 		{
 			bool has = versions.is_available();
-			if (!has && exceptionOnFail) OpenEFW_EXCEPTION(Versions, "Version " + to_string(versions.use()) + " is not available for lib " + type_name());
+			if (!has && exceptionOnFail) OpenEFW_EXCEPTION(Versions, "Version " + to_string(versions.use()) + " is not available for lib " + m_typeinfo.type_name());
 			return has;
 		}
 
@@ -75,14 +78,13 @@ namespace OpenEFW
 		// call function
 		template<typename R = void, typename ...A> inline R call(const string &name, A... args) {
 			auto f = function<R(A...)>(name);
-			if (!f) OpenEFW_EXCEPTION(R(A...), "function " + name + " not found in lib " + type_name());
+			if (!f) OpenEFW_EXCEPTION(R(A...), "function " + name + " not found in lib " + m_typeinfo.type_name());
 			return (*f)(forward<A>(args)...);
 		};
 
 		template<typename T> Library<T>* get()
 		{
-			static size_t t = TypeInfo<T>::hash_code();
-			if (code == t) return static_cast<Library<T>*>(this);
+			if (m_typeinfo.hash_code() == TypeInfo<T>::hash_code()) return static_cast<Library<T>*>(this);
 			return nullptr;
 		};
 
@@ -105,7 +107,7 @@ namespace OpenEFW
 		using Super = Library<>;
 		using This = Library<T>;
 
-		Library(){ setType<T>(); };
+		Library(){ m_typeinfo.set<T>(); };
 		virtual ~Library(){};
 	};
 };

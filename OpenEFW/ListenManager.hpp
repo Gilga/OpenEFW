@@ -31,12 +31,11 @@
 #ifndef __OPENEFW_LISTEN_MANAGER_HPP__
 #define __OPENEFW_LISTEN_MANAGER_HPP__
 
-#include "BaseClass.hpp"
 #include "PointerMap.hpp"
 
 namespace OpenEFW
 {
-	template<typename Listener> struct ListenManager : public BaseClass
+	template<typename Listener> struct ListenManager
 	{
 		using ID = ::std::size_t;
 		using NAME = ::std::string;

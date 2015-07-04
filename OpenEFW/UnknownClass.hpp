@@ -28,48 +28,62 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_FUNCTIONLIST_HPP__
-#define __OPENEFW_FUNCTIONLIST_HPP__
+#ifndef __OPENEFW_UNKNOWNCLASS_HPP__
+#define __OPENEFW_UNKNOWNCLASS_HPP__
 
-#include "SmartMap.hpp"
+#ifndef OpenEFW_SetCurrentClass
+#define OpenEFW_SetCurrentClass private: virtual void set() { _unknownClass<::std::remove_pointer<decltype(this)>::type>() = this; };
+#endif
+
+#include "typeinfo.hpp"
+
+#include <mutex>
 
 namespace OpenEFW
 {
-	class FunctionList {
-	public:
-		using BaseFunction = Delegate<>;
-		template<typename T> using Function = Delegate<T>;
-		using Map = SmartMap<string, BaseFunction>;
+	template<typename T> using remove_pointer = ::std::remove_pointer<T>;
+	template<typename T> using remove_reference = ::std::remove_reference<T>;
+	using mutex = ::std::mutex;
+	using lock_guard_mutex = ::std::lock_guard<mutex>;
 
-		inline void clear() { map.clear(); };
+	/*
+	 *	This class retuns a derivated class without casting
+	 */
+	class UnknownClass {
+	private:
 
-		// count of functions in list
-		inline size_t count() const { return map.size(); };
-
-		// get base function
-		inline BaseFunction* get(const string &name) { return map.get(name); };
-
-		// remove function
-		inline bool remove(const string &name) { return map.del(name); };
-
-		// get function
-		template<typename T> inline Function<T>* function(const string &name) {
-			string funcname = getFuncName<T>(name);
-			BaseFunction *fb = get(funcname);
-			return fb ? fb->get<T>() : nullptr;
-		};
-
-		// set function
-		template<typename T, typename F> inline void set(const string &name, F func) {
-			string funcname = getFuncName<T>(name);
-			if (!get(funcname)) map.create<Function<T>>(funcname, func);
-			else map.replace(funcname, new Function<T>(func));
-		};
+		// for thread safety
+		static mutex& _mutex(){ static mutex m; return m; };
 
 	protected:
-		template<typename T> inline string getFuncName(const string& name) { return name + " " + TypeInfo::Get<T>::str(); };
+		TypeInfo m_typeinfo;
 
-		Map map;
+		// saves and returns the current object
+		template<typename T> static T*& _unknownClass(){
+			static T* object = nullptr;
+			return object;
+		};
+
+		// sets the current object
+		virtual void set() = 0;
+		virtual void Destructor() {};	// Destructor
+
+	public:
+		virtual TypeInfo getTypeInfo() { return m_typeinfo; };
+
+		virtual string str() { return "[ UnknownClass ]"; };
+	
+		// returns current object, thread secure
+		template<typename T> T* get(){
+			lock_guard_mutex guard(_mutex());
+			set();
+			T*& uobj = _unknownClass<T>();
+			T* obj = uobj; uobj = nullptr;
+			return obj;
+		};
+
+		virtual ~UnknownClass() { Destructor(); }; // Destructor
+		virtual void Constructor() {};	// Constructor
 	};
 };
 

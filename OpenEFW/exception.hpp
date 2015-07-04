@@ -34,10 +34,10 @@
 #include <string>
 #include <exception>
 
+#include "typeinfo.hpp"
+
 namespace OpenEFW
 {
-	using ::std::string;
-	using ::std::to_string;
 	using ::std::exception;
 	
 	namespace ExceptionSettings {
@@ -70,7 +70,7 @@ namespace OpenEFW
 
 	protected:
 
-		string type = typeid(T).name();
+		string type = TypeInfo::Get<T>::str();
 		string msg;
 		string line;
 	};

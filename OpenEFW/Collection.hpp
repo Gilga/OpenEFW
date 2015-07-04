@@ -35,7 +35,10 @@
 #include <map>
 #include <set>
 
-#include "BaseClass.hpp"
+#include "exception.hpp"
+#include "macros/exception.hpp"
+
+#include "UnknownClass.hpp"
 
 namespace OpenEFW {
 
@@ -44,15 +47,16 @@ namespace OpenEFW {
 
 	template<typename ...A> class Collection;
 
-	template<> class Collection<> : public BaseClass {
+	template<> class Collection<> : public UnknownClass {
+	protected:
+		TypeInfo m_typeinfo;
+
 	public:
 		using This = Collection<>;
 
 		template<typename T> Collection<T>* cast(){
 			using Derived = Collection<T>;
-			static size_t code = TypeInfo<T>::hash_code();
-
-			if (hash_code() != code) return nullptr;
+			if (m_typeinfo.hash_code() != TypeInfo::Get<T>::hash_code()) return nullptr;
 			return static_cast<Derived*>(this);
 		}
 
@@ -67,14 +71,14 @@ namespace OpenEFW {
 		using Key = K;
 		using Hasher = H;
 		using Type = T;
-		using Set = S;
 		using Map = M;
+		using Set = S;
 
-		using This = Collection<Key, Type, Hasher, Map>;
+		using This = Collection<Key, Type, Hasher, Map, Set>;
 		using Super = Collection<>;
 		using Index = size_t;
 
-		Collection() { setType<Type>(); }
+		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
 
 		size_t size() { return map.size(); };
 
@@ -83,37 +87,49 @@ namespace OpenEFW {
 		bool has(Key id){ return size() && map.find(id) != map.end(); }
 
 		Type& first(){
-			if (!size()) OpenEFW_EXCEPTION(This, ": has no entry '" + type_name() + "'");
+			if (!size()) OpenEFW_EXCEPTION(This, ": has no entry '" + m_typeinfo.type_name() + "'");
 			return map.begin()->second;
 		}
 
 		Type& getByIndex(Index id){
-			if (id >= size()) OpenEFW_EXCEPTION(This, "invalid index " + to_string(id) + " for entries '" + type_name() + "'");
+			if (id >= size()) OpenEFW_EXCEPTION(This, "invalid index " + to_string(id) + " for entries '" + m_typeinfo.type_name() + "'");
 			Index index = 0; for (auto& e : map) { if (index == id) { return e.second; }; ++index; }
-			OpenEFW_EXCEPTION(This, "weird error for entries '" + type_name() + "'");
+			OpenEFW_EXCEPTION(This, "weird error for entries '" + m_typeinfo.type_name() + "'");
 		}
 
-		Type& get(Key id){
-			if (!has(id)) OpenEFW_EXCEPTION(This, "could not find entry '" + type_name() + "' with id " + Hasher::toStr(id));
+		Type& get(Key id, bool ignore = false){
+			if (!ignore && !has(id)) OpenEFW_EXCEPTION(This, "could not find entry " + Hasher::toStr(id) + " in " + m_typeinfo.type_name());
 			return map[id];
 		}
 
+		Type& add(Key id, bool ignore = false){ if (ignore || !has(id)) { list.insert(id), map[id] = map[id]; }; return get(id, ignore); }
 
-		Type& add(Key id){ if (!has(id)) { list.insert(id), map[id] = map[id]; }; return get(id); }
-
-		bool del(Key id){ if (has(id)) { map.erase(id), list.erase(id); }; return !has(id); }
+		bool del(Key id, bool ignore = false){ if (ignore || has(id)) { map.erase(id), list.erase(id); }; return !has(id); }
 
 		Set list;
 		Map map;
 	};
 
 	template<typename Key, typename T, typename Hasher, typename Map> class Collection<Key, T, Hasher, Map>
-		: public Collection<Key, T, Hasher, Map, set<Key, Hasher >> {};
+		: public Collection<Key, T, Hasher, Map, set<Key, Hasher>> {
+			OpenEFW_SetCurrentClass
+	public:
+		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+	};
 
 	template<typename Key, typename T, typename Hasher> class Collection<Key, T, Hasher>
-		: public Collection<Key, T, Hasher, map<Key, T, Hasher>, set<Key, Hasher>>{};
+		: public Collection<Key, T, Hasher, map<Key, T, Hasher>, set<Key, Hasher>>{
+			OpenEFW_SetCurrentClass
+	public:
+		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+	};
 
-	template<typename Key, typename T> class Collection<Key, T> : public Collection<Key, T, Key>{};
+	template<typename Key, typename T> class Collection<Key, T> : public Collection<Key, T, Key>{
+		OpenEFW_SetCurrentClass
+
+	public:
+		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+	};
 };
 
 #endif

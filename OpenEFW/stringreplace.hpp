@@ -28,38 +28,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_BASECLASS_HPP__
-#define __OPENEFW_BASECLASS_HPP__
+#ifndef __OPENEFW_STRINGREPLACE_HPP__
+#define __OPENEFW_STRINGREPLACE_HPP__
 
-#include "ObjectGenerator.hpp"
+#include <string>
 
 namespace OpenEFW
 {
-	struct BaseClass
-	{
-		virtual ~BaseClass() { Destructor(); }; // Destructor
-		virtual void Constructor() {};	// Constructor
-
-		size_t hash_code() { return code; };
-		string type_name() { return type; };
-
-		virtual string str() { return "[" + type_name() + "]"; };
-
-	protected:
-		virtual void Destructor() {};	// Destructor
-
-		inline void setType(string type) {
-			this->type = type;
-			this->code = hash<string>()(type);
+	using ::std::size_t;
+	using ::std::string;
+	using ::std::to_string;
+	
+	struct String {
+		static void replaceAll(string& str, const string& from, const string& to) {
+			if(from.empty())
+				return;
+			string wsret;
+			wsret.reserve(str.length());
+			size_t start_pos = 0, pos;
+			while((pos = str.find(from, start_pos)) != string::npos) {
+				wsret += str.substr(start_pos, pos - start_pos);
+				wsret += to;
+				pos += from.length();
+				start_pos = pos;
+			}
+			wsret += str.substr(start_pos);
+			str.swap(wsret); // faster than str = wsret;
 		};
-
-		template<typename T> inline void setType() {
-			type = TypeInfo<T>::str();
-			code = TypeInfo<T>::hash_code();
-		};
-
-		size_t code = 0;
-		string type = "?";
 	};
 };
 

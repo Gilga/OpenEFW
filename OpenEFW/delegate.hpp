@@ -67,30 +67,21 @@ namespace OpenEFW
 	template<> class Delegate<> {
 	protected:
 		using This = Delegate<>;
-
-		string m_type = "?";
-		size_t m_code = 0;
 		
+		TypeInfo m_typeinfo;
+	
 		virtual void default() = 0;
-
-		template<typename T> inline void typeInfo() {
-			m_type = TypeInfo<T>::str();
-			m_code = TypeInfo<T>::hash_code();
-		};
 
 	public:
 		virtual ~Delegate() {};
 
-		size_t hash_code() { return m_code; };
-		string str() { return m_type; };
+		TypeInfo getTypeInfo() { return m_typeinfo; };
 
 		template<typename T> Delegate<T>* get()
 		{
-			if (hasType<T>())  return static_cast<Delegate<T>*>(this);
+			if (m_typeinfo.hasType<T>())  return static_cast<Delegate<T>*>(this);
 			return nullptr;
 		}
-
-		template<typename T> bool hasType() const { return m_code == TypeInfo<T>::hash_code(); };
 	};
 
 	template<typename R, typename ...A>
@@ -103,7 +94,7 @@ namespace OpenEFW
 		using func_ptr_type = R(*)(A...);
 
 	private:
-		void default() { typeInfo<R(A...)>(); };
+		void default() { m_typeinfo.set<R(A...)>(); };
 
 		Delegate(void* const o, stub_ptr_type const m) _NOEXCEPT :
 		object_ptr_(o), stub_ptr_(m) { default(); }

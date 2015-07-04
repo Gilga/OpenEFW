@@ -31,45 +31,50 @@
 #ifndef __OPENEFW_TYPE_INFO_HPP__
 #define __OPENEFW_TYPE_INFO_HPP__
 
-#include <string>
+#include "stringReplace.hpp"
 
 namespace OpenEFW
 {
 	using ::std::type_info;
-	using ::std::size_t;
-	using ::std::string;
-	using ::std::to_string;
 
-	template<typename T = void> struct TypeInfo
-	{
-		static const type_info& type_info() { return typeid(T); }
-		static inline size_t hash_code() { static size_t hash_code = type_info().hash_code(); return hash_code; }
-		static inline const char* c_str() { static const char* name = type_info().name(); return name; }
-		static inline string str() { static string name = clean(c_str()); return name; }
-
+	class TypeInfo {
 	protected:
-		static inline string clean(const string& str) {
-			string target = str;
-			string::size_type index = 0;
-			string::size_type invalid = string::npos;
+		size_t m_hash_code = 0;
+		string m_type_name = "?";
 
-			string s = "__cdecl"; index = target.find(s);
-			if (index != invalid) target.replace(index, s.length(), "");
+	public:
+		template<typename T> inline void set() {
+			m_type_name = Get<T>::str();
+			m_hash_code = Get<T>::hash_code();
+		};
 
-			index = target.find("::");
+		template<typename T> bool hasType() const { return m_hash_code == TypeInfo::Get<T>::hash_code(); };
 
-			if (index != invalid)
-			{
-				decltype(index) begin = target.substr(0, index).rfind(" ") + 1;
-				decltype(index) end = target.rfind("(") - begin;
-				target = target.substr(begin, end);
-			}
+		virtual size_t hash_code() { return m_hash_code; };
+		virtual string type_name() { return m_type_name; };
 
-			return target;
+		template<typename T> struct Get
+		{
+			static const type_info& type_info() { return typeid(T); }
+			static inline size_t hash_code() { static size_t hash_code = type_info().hash_code(); return hash_code; }
+			static inline const char* c_str() { static const char* name = type_info().name(); return name; }
+			static inline string str() { static string name = clean(c_str()); return name; }
+
+			static inline string clean(string target) {
+		
+				String::replaceAll(target, typeid(string).name(), "std::string");
+				String::replaceAll(target, "__cdecl", "");
+				String::replaceAll(target, "class ", "");
+				String::replaceAll(target, "struct ", "");
+				String::replaceAll(target, " >", ">");
+				String::replaceAll(target, "< ", "<");
+
+				return target;
+			};
 		};
 	};
 
-	template<> const char* TypeInfo<string>::c_str() { static const char* name = "std::string"; return name; }
+	template<> const char* TypeInfo::Get<string>::c_str() { static const char* name = "std::string"; return name; }
 };
 
 #endif
