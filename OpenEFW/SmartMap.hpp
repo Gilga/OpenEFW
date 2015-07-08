@@ -44,6 +44,15 @@ namespace OpenEFW
 		using typename Super::Type;
 		using typename Super::Value;
 
+		SmartMap() { defaultRemover(); }
+		
+		This& operator=(const This &other){ m_map = other.m_map; return *this; };
+
+		virtual void clear(){ 
+			for (auto &e : m_map) { remover(e.first, e.second.get()); }
+			__super::clear();
+		};
+
 		virtual bool add(Id id, const Type& obj)
 		{
 			if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
@@ -65,10 +74,17 @@ namespace OpenEFW
 		};
 
 	protected:
+		Delegate<void(const Id& id, const Type&)> remover;
+
 		virtual Value createValue() { return Value(); };
-		virtual Value createValue(const Type& obj) { return Value(obj); };
-		virtual Type getValue(const Value& v) { return v.get(); };
-		virtual void replaceValue(Value& v, const Type& obj) { v.reset(obj); };
+		virtual Value createValue(const Id& id) { return Value(); };
+		virtual Value createValue(const Id& id, const Type& obj) { return Value(obj, [&](Type){}); };
+		virtual void replaceValue(const Id& id, Value& v, const Type& obj) { v.reset(obj, [&](Type){}); };
+		virtual Type getContent(const Value& v) { return v.get(); };
+
+	public:
+		void setRemover(const decltype(remover)& d){ remover = d; };
+		void defaultRemover() { remover = [](const Id& id, const Type& obj){ delete obj; }; };
 	};
 };
 

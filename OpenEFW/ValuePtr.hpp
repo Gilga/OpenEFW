@@ -38,87 +38,70 @@
 
 namespace OpenEFW
 {
-	namespace DATA
-	{
-		template<typename ...> class ValuePtr;
+	template<typename ...> class ValuePtr;
 
-		template<> class ValuePtr<> {
-		protected:
-			using This = ValuePtr<>;
+	template<> class ValuePtr<> {
+	protected:
+		using This = ValuePtr<>;
 
-			size_t m_size = 0;
-			string m_type = "?";
-			size_t m_code = 0;
-			::std::shared_ptr<void> m_data;
+		TypeInfo m_typeinfo;
 
-			template<typename T> inline void typeInfo() {
-				m_type = TypeInfo<T>::str();
-				m_code = TypeInfo<T>::hash_code();
-			};
+		size_t m_size = 0;
+		shared_ptr<void> m_data;
 
-			struct null_delete { void operator()(void const *) const {} };
+		struct null_delete { void operator()(void const *) const {} };
 
-		public:
-			size_t hash_code() { return m_code; };
-			string str() { return m_type; };
-			size_t size() { return m_size; };
+	public:
+		TypeInfo getTypeInfo() { return m_typeinfo; };
 
-			template<typename T> T* get()
-			{
-				if (hasType<T>()) return static_cast<T*>(m_data.get());
-				return nullptr;
-			}
+		template<typename T> T* get()
+		{
+			if (hasType<T>()) return static_cast<T*>(m_data.get());
+			return nullptr;
+		}
 
-			template<> void* get() { return m_data.get(); };
+		template<> void* get() { return m_data.get(); };
 
-			template<typename T> bool hasType() const { return m_code == TypeInfo<T>::hash_code(); };
+		template<typename T> bool hasType() const { return m_code == TypeInfo::Get<T>::hash_code(); };
 
-			explicit operator bool() const _NOEXCEPT{ return m_data ? true : false; };
-			bool operator==(::std::nullptr_t const) const _NOEXCEPT{ return m_data == nullptr; };
-			bool operator!=(::std::nullptr_t const) const _NOEXCEPT{ return m_data != nullptr; };
+		explicit operator bool() const _NOEXCEPT{ return m_data ? true : false; };
+		bool operator==(nullptr_t const) const _NOEXCEPT{ return m_data == nullptr; };
+		bool operator!=(nullptr_t const) const _NOEXCEPT{ return m_data != nullptr; };
+	};
+
+	template<typename T> class ValuePtr<T> : public ValuePtr<>{
+	protected:
+		using This = ValuePtr<T>;
+		using Super = ValuePtr<>;
+
+	public:
+
+		ValuePtr(){ m_typeinfo.set<T>(); };
+		ValuePtr(ValuePtr const&) = default;
+		//ValuePtr(ValuePtr& v) { m_typeinfo.set<T>(); m_data = v.m_data; m_size = v.m_size; };
+
+		//ValuePtr&operator=(ValuePtr& v) const _NOEXCEPT{
+		//	m_data = v.m_data;
+		//	v.m_data.reset();
+		//	return *this;
+		//};
+
+		ValuePtr& operator=(ValuePtr const&) = default;
+
+		template<typename P> enable_if_t<is_convertible<P*, T*>::value, ValuePtr&> operator=(P& v) _NOEXCEPT{
+			m_data.reset(&v, null_delete{});
+			m_size = sizeof(P);
+			return *this;
 		};
 
-		template<typename T> class ValuePtr<T> : public ValuePtr<>{
-		protected:
-			using This = ValuePtr<T>;
-			using Super = ValuePtr<>;
-
-		public:
-
-			ValuePtr(){ typeInfo<T>(); };
-			ValuePtr(ValuePtr const&) = default;
-			//ValuePtr(ValuePtr& v) { typeInfo<T>(); m_data = v.m_data; m_size = v.m_size; };
-
-			//ValuePtr&operator=(ValuePtr& v) const _NOEXCEPT{
-			//	m_data = v.m_data;
-			//	v.m_data.reset();
-			//	return *this;
-			//};
-
-			ValuePtr& operator=(ValuePtr const&) = default;
-
-			template<typename P> std::enable_if_t<::std::is_convertible<P*, T*>::value, ValuePtr&> operator=(P& v) _NOEXCEPT{
-				m_data.reset(&v, null_delete{});
-				m_size = sizeof(P);
-				return *this;
-			};
-
-			template<typename P> std::enable_if_t<::std::is_convertible<P*, T*>::value, ValuePtr&> operator=(P* v) _NOEXCEPT{
-				m_data.reset(v);
-				m_size = sizeof(P);
-				return *this;
-			};
-		};
-
-		template<typename T, typename ...A> class ValuePtr<T, A...> : public ValuePtr<A...>{
-		protected:
-			using This = ValuePtr<T, A...>;
-			using Super = ValuePtr<A...>;
-			using Base = ValuePtr<>;
+		template<typename P> enable_if_t<is_convertible<P*, T*>::value, ValuePtr&> operator=(P* v) _NOEXCEPT{
+			m_data.reset(v);
+			m_size = sizeof(P);
+			return *this;
 		};
 	};
 
-	using _value_ptr = DATA::ValuePtr<>;
+	using _value_ptr = ValuePtr<>;
 };
 
 #endif

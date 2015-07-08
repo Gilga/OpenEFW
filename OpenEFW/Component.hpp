@@ -32,6 +32,7 @@
 #define __OPENEFW_COMPONENT_HPP__
 
 #include <ostream>
+#include <iostream>
 
 #include "Collection.hpp"
 #include "Delegate.hpp"
@@ -41,26 +42,25 @@ namespace OpenEFW {
 	using ::std::binary_function;
 	using ::std::ostream;
 
-	template<typename T = void, typename Identifer = string> struct Component {
-		using Type = T;
-		using This = Component<T>;
+	struct Component {
+		using This = Component;
+		using Identifer = string;
 
 		struct Key : public binary_function<Key, Key, bool>
 		{
-			size_t first = 0; //This*
-			Identifer second;
+			Identifer id;
 
 			Key() = default;
-			Key(size_t parent, Identifer id) : first(parent), second(id) {};
+			Key(Identifer id) : id(id) {};
 
 			static bool compare(const Key& x, const Key& y) { return x == y; };
-			static string toStr(Key& k) { return "[" + to_string(k.first) + "][" + k.second + "]"; }; // TypeInfo::Get<decltype(k.first)>::str()
+			static string toStr(Key& k) { return k.id; };
 
-			Key& operator=(const Key &other) const { return *this; };
-			bool operator==(const Key &other) const	{ return (first == other.first && second == other.second); };
-			bool operator<(const Key &other) const	{ return first < other.first || (first == other.first && second.length() < other.second.length()); };
-			size_t operator()(const Key& k) const { return hash<decltype(k.first)>()(k.first) ^ (hash<decltype(k.second)>()(k.second) << 1); };
-			bool operator()(const Key& lhs, const Key& rhs) const { return lhs == rhs; }; // lhs < rhs  -> not right yet
+			Key& operator=(const Key &other) { id = other.id; return *this; };
+			bool operator==(const Key &other) const	{ return (id == other.id); };
+			bool operator<(const Key &other) const	{ return (id.length() < other.id.length()); };
+			size_t operator()(const Key& k) const { return hash<decltype(k.id)>()(k.id); };
+			bool operator()(const Key& lhs, const Key& rhs) const { return lhs == rhs; };
 		};
 
 	protected:
@@ -71,29 +71,27 @@ namespace OpenEFW {
 		template<typename T> using Function = typename ComponentFunction<T>::Type;
 		template<typename T> using Components = Collection<Key, T, Key, unordered_map<Key, T, Key>>;
 		
-		using List = SmartMap<size_t,Collection<>>;
+		using List = SmartMap<size_t, Collection<>>;
 
 	protected:
 		List m_list;
-
-		Key createKey(Identifer id) { return{ 0, id }; };
-
-		template<typename I, typename T> static inline Function<T>& function() {
-			static Function<T> func;
-			return func;
-		};
+		Key createKey(Identifer id) { return{ id }; };
 
 	public:
 
 		template<typename I = void> struct Static
 		{
 		protected:
+			template<typename I, typename T> static inline Function<T>& function() { static Function<T> func; return func; };
+
 			template<typename T> static inline string geType() {
 				static auto str = TypeInfo::Get<I>::str() + "::" + TypeInfo::Get<T>::str();
 				return str;
 			};
 
 		public:
+			//template<typename I, typename T> static inline Function<T>& function() { static Function<T> func; return func; };
+
 			template<typename T> static inline void set(Function<T> func) {
 				auto& current = function<I, T>();
 				if (current) OpenEFW_EXCEPTION(This, geType<T>() + " function already exists");
@@ -133,66 +131,114 @@ namespace OpenEFW {
 			return *nlist;
 		}
 
-		template<typename T> T& ReplaceValue(Identifer id, Identifer old_id) {
+		template<typename T> T& replaceValue(Identifer id, Identifer old_id) {
 			auto &key = createKey(id);
-			auto &klist = list<T>();
+			auto &klist = list<T>(true);
 
 			auto &value = klist.has(key) ? klist.get(key, true) : klist.add(key, true);
-			if (old_id != id) AddValue<T>(old_id) = value; // old
+			if (old_id != id) addValue<T>(old_id) = value; // old
 
 			return value;
 		}
 
-		template<typename T> Function<T>& ReplaceValue(Identifer id) { return ReplaceValue<Function<T>>(id, id); }
+		template<typename T> Function<T>& replaceValue(Identifer id) { return replaceValue<Function<T>>(id, id); }
+		template<typename T> This& replaceValue(Identifer id) { return replaceValue<This>(id, id); }
 
-		template<typename T> T& AddValue(Identifer id) { return list<T>(true).add(createKey(id)); }
-		template<typename T> T& DelValue(Identifer id) { return list<T>().del(createKey(id)); }
-		template<typename T> T& GetValue(Identifer id) { return list<T>().get(createKey(id)); }
+		template<typename T> T& addValue(Identifer id) { return list<T>(true).add(createKey(id)); }
+		template<typename T> bool delValue(Identifer id) { return list<T>().del(createKey(id)); }
+		template<typename T> T& getValue(Identifer id) { return list<T>().get(createKey(id)); }
 
-		template<typename T> Component<T>& ReplaceComponent(Identifer id, Identifer old_id) { return ReplaceValue<Component<T>>(id, old_id); }
-		template<typename T> Component<T>& ReplaceComponent(Identifer id) { return ReplaceValue<Component<T>>(id); }
-		template<typename T> Component<T>& AddComponent(Identifer id) { return AddValue<Component<T>>(id); }
-		template<typename T> Component<T>& DelComponent(Identifer id) { return DelValue<Component<T>>(id); }
-		template<typename T> Component<T>& GetComponent(Identifer id) { return GetValue<Component<T>>(id); }
+		This& replaceComponent(Identifer id, Identifer old_id) { return replaceValue<This>(id, old_id); }
+		This& replaceComponent(Identifer id) { return replaceValue<This>(id); }
+		This& addComponent(Identifer id) { return addValue<This>(id); }
+		bool delComponent(Identifer id) { return delValue<This>(id); }
+		This& getComponent(Identifer id) { return getValue<This>(id); }
 
-		template<typename T> Function<T>& ReplaceFunction(Identifer id, Identifer old_id) { return ReplaceValue<Function<T>>(id, old_id); }
-		template<typename T> Function<T>& ReplaceFunction(Identifer id) { return ReplaceValue<Function<T>>(id); }
-		template<typename T> Function<T>& AddFunction(Identifer id) { return AddValue<Function<T>>(id); }
-		template<typename T> Function<T>& DelFunction(Identifer id) { return DelValue<Function<T>>(id); }
-		template<typename T> Function<T>& GetFunction(Identifer id) { return GetValue<Function<T>>(id); }
+		template<typename T> Function<T>& replaceFunction(Identifer id, Identifer old_id) { return replaceValue<Function<T>>(id, old_id); }
+		template<typename T> Function<T>& replaceFunction(Identifer id) { return replaceValue<Function<T>>(id); }
+		template<typename T> Function<T>& addFunction(Identifer id) { return addValue<Function<T>>(id); }
+		template<typename T> bool delFunction(Identifer id) { return delValue<Function<T>>(id); }
+		template<typename T> Function<T>& getFunction(Identifer id) { return getValue<Function<T>>(id); }
 
-		template<typename T = void, typename ...A> T Call(Identifer id, A... args){ return GetFunction<T(A...)>(id)(this, forward<A>(args)...); };
-		template<typename T = void, typename ...A> T Invoke(Function<T(A...)> func, A... args){ return func(this, forward<A>(args)...); };
+		template<typename T = void, typename ...A> T call(Identifer id, A... args){ return getFunction<T(A...)>(id)(this, forward<A>(args)...); };
+		template<typename T = void, typename ...A> T invoke(Function<T(A...)> func, A... args){ return func(this, forward<A>(args)...); };
 
-		template<typename T> enable_if_t<!is_same<Component, typename decay<T>::type>::value, T>&
-			Add(Identifer id){ return AddValue<T>(id); }
+		template<typename T> enable_if_t<!is_same<This, typename decay<T>::type>::value, T>&
+			add(Identifer id){ return addValue<T>(id); }
 
-		template<typename T> enable_if_t<!is_same<Component, typename decay<T>::type>::value, T>&
-			Del(Identifer id){ return DelValue<T>(id); }
+		template<typename T> enable_if_t<!is_same<This, typename decay<T>::type>::value, T>&
+			del(Identifer id){ return delValue<T>(id); }
 
-		template<typename T> enable_if_t<!is_same<Component, typename decay<T>::type>::value, T>&
-			Get(Identifer id){ return GetValue<T>(id); }
+		template<typename T> enable_if_t<!is_same<This, typename decay<T>::type>::value, T>&
+			get(Identifer id){ return getValue<T>(id); }
 
-		template<typename T> enable_if_t<is_same<Component, typename decay<T>::type>::value, Component<T>>&
-			Add(Identifer id){ return AddComponent<T>(id); }
+		template<typename T> enable_if_t<is_same<This, typename decay<T>::type>::value, This>&
+			add(Identifer id){ return addComponent(id); }
 
-		template<typename T> enable_if_t<is_same<Component, typename decay<T>::type>::value, Component<T>>&
-			Del(Identifer id){ return DelComponent<T>(id); }
+		template<typename T> enable_if_t<is_same<This, typename decay<T>::type>::value, bool>
+			del(Identifer id){ return delComponent(id); }
 
-		template<typename T> enable_if_t<is_same<Component, typename decay<T>::type>::value, Component<T>>&
-			Get(Identifer id){ return GetComponent<T>(id); }
-
-		template<typename T> enable_if_t<is_same<Function<T>, typename decay<T>::type>::value, Function<T>>&
-			Add(Identifer id){ return AddFunction<T>(id); }
+		template<typename T> enable_if_t<is_same<This, typename decay<T>::type>::value, This>&
+			get(Identifer id){ return getComponent(id); }
 
 		template<typename T> enable_if_t<is_same<Function<T>, typename decay<T>::type>::value, Function<T>>&
-			Del(Identifer id){ return DelFunction<T>(id); }
+			add(Identifer id){ return addFunction<T>(id); }
 
 		template<typename T> enable_if_t<is_same<Function<T>, typename decay<T>::type>::value, Function<T>>&
-			Get(Identifer id){ return GetFunction<T>(id); }
+			del(Identifer id){ return delFunction<T>(id); }
 
-		//template<typename T> This& operator=(T other){ value = other; return *this; };
-		//friend ostream & operator<<(ostream &os, const This& p) { return os << p.value; };
+		template<typename T> enable_if_t<is_same<Function<T>, typename decay<T>::type>::value, Function<T>>&
+			get(Identifer id){ return getFunction<T>(id); }
+
+		template<typename T> struct In {
+			Identifer id;
+			T value;
+			In(const Identifer &id, const T &value) : id(id), value(value) {};
+		};
+
+		template<typename T> This& operator=(const In<Function<T>> in){ replaceFunction(in.id) = in.value; return *this; };
+		template<typename T> This& operator=(const In<T> in){ replaceValue(in.id) = in.value; return *this; };
+
+		This& operator=(const In<This>& in){ replaceComponent(in.id) = in.value; return *this; };
+		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; };
+
+		friend ostream & operator<<(ostream &os, const This& o) { return os << "Component"; };
+
+		void copy(This& other){
+			auto &map = other.m_list;
+			m_list.clear();
+			map.loop([&](List::Id id, List::Type type){ m_list.add(id, type->copy()); return false; });
+			//for (auto &e : map.source()) m_list.add(e.first, e.second.get()->copy());
+		};
+
+		void steal(This& other){
+			auto &map = other.m_list;
+			m_list.clear();
+			m_list = map;
+			map.setRemover([&](const List::Id& id, const List::Type &obj){}); // this object does not own objects anymore => no deletion
+			map.clear();
+			map.defaultRemover();
+		};
+
+		void swap(This& other){
+			auto &map = other.m_list;
+			auto saved = m_list;
+
+			m_list.setRemover([&](const List::Id& id, const List::Type &obj){});
+			m_list = map;
+			m_list.defaultRemover();
+
+			map.setRemover([&](const List::Id& id, const List::Type &obj){});
+			map = saved;
+			map.defaultRemover();
+
+			saved.setRemover([&](const List::Id& id, const List::Type &obj){});
+		};
+
+		void clear(){ m_list.clear(); }
+
+		Component() {};
+		Component(const This& other) : m_list(other.m_list) {};
 	};
 };
 

@@ -37,19 +37,22 @@ namespace OpenEFW
 {
 	template<typename I, typename T> class ValueMap : public ExtendedMap<I, T, T, T>
 	{
-	public:
 		using This = ValueMap<I, T>;
 		using Super = ExtendedMap<I, T, T, T>;
-
+		
+	public:
 		using Id = typename Super::Id;
 		using Type = typename Super::Type;
 		using Value = typename Super::Value;
+		
+		This& operator=(const This &other){ m_map = other.m_map; return *this; };
 
 	protected:
 		virtual Value createValue() { return Value(); };
-		virtual Value createValue(const Type& obj) { return Value(obj); };
-		virtual Type getValue(const Value& v) { return v; };
-		virtual void replaceValue(Value& v, const Type& obj) { v = obj; };
+		virtual Value createValue(const Id& id) { return Value(); };
+		virtual Value createValue(const Id& id, const Type& obj) { return Value(obj); };
+		virtual void replaceValue(const Id& id, VValue& v, const Type& obj) { v = obj; };
+		virtual Type getContent(const Value& v) { return v; };
 	};
 };
 

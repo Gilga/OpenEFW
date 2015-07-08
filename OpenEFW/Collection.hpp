@@ -48,9 +48,6 @@ namespace OpenEFW {
 	template<typename ...A> class Collection;
 
 	template<> class Collection<> : public UnknownClass {
-	protected:
-		TypeInfo m_typeinfo;
-
 	public:
 		using This = Collection<>;
 
@@ -60,13 +57,13 @@ namespace OpenEFW {
 			return static_cast<Derived*>(this);
 		}
 
-	protected:
-		virtual void dummy() = 0;
+		virtual void copy(Collection<>& other) = 0;
+		virtual This* copy() = 0;
 	};
 
 	template<typename K, typename T, typename H, typename M, typename S> class Collection<K, T, H, M, S> : public Collection<>{
-	protected:
-		virtual void dummy() {};
+		OpenEFW_SetCurrentClass
+
 	public:
 		using Key = K;
 		using Hasher = H;
@@ -106,29 +103,47 @@ namespace OpenEFW {
 
 		bool del(Key id, bool ignore = false){ if (ignore || has(id)) { map.erase(id), list.erase(id); }; return !has(id); }
 
+		bool copy(Key id, bool ignore = false){ if (ignore || has(id)) { map.erase(id), list.erase(id); }; return !has(id); }
+
 		Set list;
 		Map map;
+
+		virtual void copy(Collection<>& other) {
+			auto ref = other.get<Collection<K, T, H, M, S>>();
+			if (ref) map = ref->map;
+		}
+
+		virtual Super* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 
 	template<typename Key, typename T, typename Hasher, typename Map> class Collection<Key, T, Hasher, Map>
 		: public Collection<Key, T, Hasher, Map, set<Key, Hasher>> {
 			OpenEFW_SetCurrentClass
 	public:
+		using This = Collection<Key, T, Hasher, Map>;
+		using Base = Collection<>;
 		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		virtual Base* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 
 	template<typename Key, typename T, typename Hasher> class Collection<Key, T, Hasher>
 		: public Collection<Key, T, Hasher, map<Key, T, Hasher>, set<Key, Hasher>>{
 			OpenEFW_SetCurrentClass
 	public:
+		using This = Collection<Key, T, Hasher>;
+		using Base = Collection<>;
 		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		virtual Base* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 
 	template<typename Key, typename T> class Collection<Key, T> : public Collection<Key, T, Key>{
 		OpenEFW_SetCurrentClass
 
 	public:
+		using This = Collection<Key, T>;
+		using Base = Collection<>;
 		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		virtual Base* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 };
 

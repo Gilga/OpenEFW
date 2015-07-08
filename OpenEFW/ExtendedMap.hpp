@@ -57,17 +57,27 @@ namespace OpenEFW
 		Map m_map;
 
 		virtual Value createValue() = 0;
-		virtual Value createValue(const Type& obj) = 0;
-		virtual Type getValue(const Value& v) = 0;
-		virtual void replaceValue(Value& v, const Type& obj) = 0;
+		virtual Value createValue(const Id& id) = 0;
+		virtual Value createValue(const Id& id, const Type& obj) = 0;
+		virtual Type getContent(const Value& v) = 0;
+		virtual void replaceValue(const Id& id, Value& v, const Type& obj) = 0;
+
+		Id getID(const Type& obj){
+			for (auto &e : m_map) if(getContent(e.second) == obj) return e.first;
+			OpenEFW_EXCEPTION(This, "getID() = not found!");
+		}
 
 	public:
 		ExtendedMap() {}
 		~ExtendedMap() { clear(); }
 
+		This& operator=(const This &other){ m_map = other.m_map; return *this; };
+
+		Map& source() { return m_map; };
+
 		size_t size() const { return m_map.size(); };
 
-		void clear(){ if (m_map.size()) m_map.clear(); };
+		virtual void clear(){ if (size()) m_map.clear(); };
 
 		bool has(Id id){ return m_map.find(id) != m_map.end(); }
 
@@ -75,14 +85,13 @@ namespace OpenEFW
 		{
 			
 			if (!is_convertible<Class*, Type>::value) OpenEFW_EXCEPTION(This, "create(!is_convertible)");
-			if (!has(id)) { m_map.insert(Pair(id, Value(new Class(forward<Args>(args)...)))); return true; }
+			if (!has(id)) { m_map.insert(Pair(id, createValue(id, new Class(forward<Args>(args)...)))); return true; }
 			return false;
 		};
 
 		virtual bool add(Id id, const Type& obj)
 		{
-			if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
-			if (!has(id)) { m_map.insert(Pair(id, createValue(obj))); return true; }
+			if (!has(id)) { m_map.insert(Pair(id, createValue(id, obj))); return true; }
 			return false; // failed, because it already exists
 		};
 
@@ -90,17 +99,17 @@ namespace OpenEFW
 		{
 			//if (!obj) OpenEFW_EXCEPTION(This, "replace(NULL)");
 			auto it = m_map.find(id);
-			if (it != m_map.end()) { replaceValue(it->second, obj); return true; }
+			if (it != m_map.end()) { replaceValue(id, it->second, obj); return true; }
 			return false; // failed, because could not found
 		};
 
 		virtual auto get(Id id)->Type
 		{
 			auto it = m_map.find(id);
-			if (it != m_map.end()) return getValue(it->second);
+			if (it != m_map.end()) return getContent(it->second);
 
 			//OpenEFW_EXCEPTION(This, "GET() -> NOT FOUND");
-			return getValue(createValue());
+			return getContent(createValue(id));
 		};
 
 		virtual auto getByIndex(const size_t id = 0)->Type
@@ -110,12 +119,12 @@ namespace OpenEFW
 
 			bool found = loop([&](Id name, Type e) {
 				bool found = (index == id);
-				if (found) replaceValue(lib, e); else ++index;
+				if (found) replaceValue(name, lib, e); else ++index;
 				return found;
 			});
 
 			//if (!found) OpenEFW_EXCEPTION(This, "GET() -> NOT FOUND");
-			return getValue(lib);
+			return getContent(lib);
 		};
 
 		virtual bool delByIndex(const size_t id = 0)
@@ -137,7 +146,7 @@ namespace OpenEFW
 		virtual bool del(const Type& obj)
 		{
 			//if (!obj) OpenEFW_EXCEPTION(This, "remove(NULL)");
-			for (auto & e : m_map) if (getValue(e.second) == obj)
+			for (auto & e : m_map) if (getContent(e.second) == obj)
 			{
 				m_map.erase(e.first);
 				return true;
@@ -148,7 +157,7 @@ namespace OpenEFW
 
 		virtual bool loop(Function f)
 		{
-			for (auto & e : m_map) if (f(e.first, getValue(e.second))) return true; // break loop
+			for (auto & e : m_map) if (f(e.first, getContent(e.second))) return true; // break loop
 			return false;
 		}
 	};
