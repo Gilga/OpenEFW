@@ -59,7 +59,7 @@ namespace OpenEFW
 		// call function
 		template<typename R = void, typename ...A> inline R call(const string &name, A... args) {
 			auto f = function<R(A...)>(name);
-			if (!f) OpenEFW_EXCEPTION(R(A...), "function " + name + " not found in lib " + str());
+			if (!f) THROW_EXCEPTION(R(A...), "function " + name + " not found in lib " + str());
 			return (*f)(forward<A>(args)...);
 		};
 

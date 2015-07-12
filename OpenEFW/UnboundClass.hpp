@@ -59,22 +59,22 @@ namespace OpenEFW
 		public:
 			template<typename T> static inline void set(Function<T> func) {
 				auto& current = function<I, T>();
-				if (current) OpenEFW_EXCEPTION(C, type<T>() + " function already exists");
+				if (current) THROW_EXCEPTION(C, type<T>() + " function already exists");
 				current = func;
 			};
 
 			template<typename J = void, typename T> static inline enable_if_t<!is_same<I, J>::value> replace(Function<T> newfunc) {
 				auto& func = function<I, T>();
-				if (!func) OpenEFW_EXCEPTION(C, type<T>() + " function does not exists");
+				if (!func) THROW_EXCEPTION(C, type<T>() + " function does not exists");
 				auto& oldfunc = function<J, T>();
 				oldfunc = func;
 				func = newfunc;
 			};
 
 			template<typename R = void, typename ...A> static inline R call(C* obj, A... args) {
-				if (!obj) OpenEFW_EXCEPTION(C, type<R(A...)>() + " object is null");
+				if (!obj) THROW_EXCEPTION(C, type<R(A...)>() + " object is null");
 				auto f = function<I,R(A...)>();
-				if (!f) OpenEFW_EXCEPTION(C, type<R(A...)>() + " function does not exists");
+				if (!f) THROW_EXCEPTION(C, type<R(A...)>() + " function does not exists");
 				return (f)(obj, forward<A>(args)...);
 			};
 		};

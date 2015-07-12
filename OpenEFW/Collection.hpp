@@ -84,18 +84,18 @@ namespace OpenEFW {
 		bool has(Key id){ return size() && map.find(id) != map.end(); }
 
 		Type& first(){
-			if (!size()) OpenEFW_EXCEPTION(This, ": has no entry '" + m_typeinfo.type_name() + "'");
+			if (!size()) THROW_EXCEPTION(This, ": has no entry '" + m_typeinfo.type_name() + "'");
 			return map.begin()->second;
 		}
 
 		Type& getByIndex(Index id){
-			if (id >= size()) OpenEFW_EXCEPTION(This, "invalid index " + to_string(id) + " for entries '" + m_typeinfo.type_name() + "'");
+			if (id >= size()) THROW_EXCEPTION(This, "invalid index " + to_string(id) + " for entries '" + m_typeinfo.type_name() + "'");
 			Index index = 0; for (auto& e : map) { if (index == id) { return e.second; }; ++index; }
 			OpenEFW_EXCEPTION(This, "weird error for entries '" + m_typeinfo.type_name() + "'");
 		}
 
 		Type& get(Key id, bool ignore = false){
-			if (!ignore && !has(id)) OpenEFW_EXCEPTION(This, "could not find entry " + Hasher::toStr(id) + " in " + m_typeinfo.type_name());
+			if (!ignore && !has(id)) THROW_EXCEPTION(This, "could not find entry " + Hasher::toStr(id) + " in " + m_typeinfo.type_name());
 			return map[id];
 		}
 

@@ -28,7 +28,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef THROW_EXCEPTION
-#include "file_x.hpp"
-#define THROW_EXCEPTION(x,y) throw ::OpenEFW::Exception<x>(y, __FILE__X, __LINE__);
+
+#ifndef TAG
+
+#include "nargs.hpp"
+#include "../Tags.hpp"
+
+#define TAG_NEW(x) namespace Tag { struct x; };
+#define TAG_MACRO(x)  ::Tag::x
+#define TAG(...) ::OpenEFW::Tags<NARGS_MACRO(TAG_MACRO,__VA_ARGS__)>
+
 #endif

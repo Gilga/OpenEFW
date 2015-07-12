@@ -28,7 +28,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef THROW_EXCEPTION
-#include "file_x.hpp"
-#define THROW_EXCEPTION(x,y) throw ::OpenEFW::Exception<x>(y, __FILE__X, __LINE__);
+#ifndef __OPENEFW_TAG_HPP__
+#define __OPENEFW_TAG_HPP__
+
+namespace OpenEFW
+{
+	template<typename ...> struct Tags{};
+};
+
 #endif

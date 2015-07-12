@@ -28,14 +28,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_ID_HPP__
-#define __OPENEFW_ID_HPP__
 
-namespace OpenEFW
-{
-	template<size_t T, typename ...> struct ID{
-		static size_t id() { static const size_t Id = T; return Id; };
-	};
-};
+#ifndef NARGS
 
+#define NARGS_1(m, x1) m(x1)
+#define NARGS_2(m, x1, x2) m(x1), m(x2)
+#define NARGS_3(m, x1, x2, x3) m(x1), m(x2), m(x3)
+#define NARGS_4(m, x1, x2, x3, x4) m(x1), m(x2), m(x3), m(x4)
+#define NARGS_5(m, x1, x2, x3, x4, x5) m(x1), m(x2), m(x3), m(x4), m(x5)
+#define NARGS_6(m, x1, x2, x3, x4, x5, x6) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6)
+#define NARGS_7(m, x1, x2, x3, x4, x5, x6, x7) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7)
+#define NARGS_8(m, x1, x2, x3, x4, x5, x6, x7, x8) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7), m(x8)
+#define NARGS_9(m, x1, x2, x3, x4, x5, x6, x7, x8, x9) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7), m(x8), m(x9)
+#define NARGS_10(m, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7), m(x8), m(x9), m(x10)
+
+#define NARGS_ID(x) x
+#define NARGS_CAT(x, y) x ## y
+#define NARGS_SEQ(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N, ...) NARGS_CAT(NARGS_, N)
+#define NARGS_MACRO(macro,...) NARGS_ID(NARGS_SEQ(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)(macro,__VA_ARGS__))
+
+#define NARGS
 #endif

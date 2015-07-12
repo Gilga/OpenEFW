@@ -84,7 +84,7 @@ namespace OpenEFW
 		template<typename Class = T, typename ...Args> bool create(Id id, Args... args)
 		{
 			
-			if (!is_convertible<Class*, Type>::value) OpenEFW_EXCEPTION(This, "create(!is_convertible)");
+			if (!is_convertible<Class*, Type>::value) THROW_EXCEPTION(This, "create(!is_convertible)");
 			if (!has(id)) { m_map.insert(Pair(id, createValue(id, new Class(forward<Args>(args)...)))); return true; }
 			return false;
 		};

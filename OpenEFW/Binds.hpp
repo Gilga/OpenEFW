@@ -28,12 +28,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_TAG_HPP__
-#define __OPENEFW_TAG_HPP__
+#ifndef __OPENEFW_BINDS_HPP__
+#define __OPENEFW_BINDS_HPP__
 
 namespace OpenEFW
 {
-	template<typename ...T> struct TAG;
+	template<typename...> struct Binds { Binds(); };
 };
 
 #endif

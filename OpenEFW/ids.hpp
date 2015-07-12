@@ -28,12 +28,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_BIND_HPP__
-#define __OPENEFW_BIND_HPP__
+#ifndef __OPENEFW_ID_HPP__
+#define __OPENEFW_ID_HPP__
 
 namespace OpenEFW
 {
-	template<typename...> struct BIND { BIND(); };
+	template<size_t T, typename ...> struct Ids {
+		static size_t id() { static const size_t Id = T; return Id; };
+	};
 };
 
 #endif

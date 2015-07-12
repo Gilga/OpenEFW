@@ -56,7 +56,7 @@ namespace OpenEFW
 		bool checkVersion(bool exceptionOnFail = false)  // check current version of library
 		{
 			bool has = versions.is_available();
-			if (!has && exceptionOnFail) OpenEFW_EXCEPTION(Versions, "Version " + to_string(versions.use()) + " is not available for lib " + m_typeinfo.type_name());
+			if (!has && exceptionOnFail) THROW_EXCEPTION(Versions, "Version " + to_string(versions.use()) + " is not available for lib " + m_typeinfo.type_name());
 			return has;
 		}
 
@@ -78,7 +78,7 @@ namespace OpenEFW
 		// call function
 		template<typename R = void, typename ...A> inline R call(const string &name, A... args) {
 			auto f = function<R(A...)>(name);
-			if (!f) OpenEFW_EXCEPTION(R(A...), "function " + name + " not found in lib " + m_typeinfo.type_name());
+			if (!f) THROW_EXCEPTION(R(A...), "function " + name + " not found in lib " + m_typeinfo.type_name());
 			return (*f)(forward<A>(args)...);
 		};
 

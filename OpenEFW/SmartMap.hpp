@@ -55,13 +55,13 @@ namespace OpenEFW
 
 		virtual bool add(Id id, const Type& obj)
 		{
-			if (!obj) OpenEFW_EXCEPTION(This, "add(NULL)");
+			if (!obj) THROW_EXCEPTION(This, "add(NULL)");
 			return __super::add(id, obj);
 		};
 
 		virtual bool replace(Id id, const Type& obj)
 		{
-			if (!obj) OpenEFW_EXCEPTION(This, "replace(NULL)");
+			if (!obj) THROW_EXCEPTION(This, "replace(NULL)");
 			return __super::replace(id, obj);
 		};
 
@@ -69,7 +69,7 @@ namespace OpenEFW
 
 		virtual bool del(const Type& obj)
 		{
-			if (!obj) OpenEFW_EXCEPTION(This, "remove(NULL)");
+			if (!obj) THROW_EXCEPTION(This, "remove(NULL)");
 			return __super::del(obj);
 		};
 

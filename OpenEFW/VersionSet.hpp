@@ -73,7 +73,7 @@ namespace OpenEFW
 		// get
 		Result get(size_t id, bool exceptionOnFail = false) {
 			if (!active() || list.size() >= id) {
-				if (exceptionOnFail) OpenEFW_EXCEPTION(Type, "There is no such Version");
+				if (exceptionOnFail) THROW_EXCEPTION(Type, "There is no such Version");
 				return {};
 			};
 			id_t index = 0;
@@ -92,7 +92,7 @@ namespace OpenEFW
 		{
 			auto r = newest();
 			bool tmp = (version > 0 && r.result &&version == r.value);
-			if (!tmp && exceptionOnFail) OpenEFW_EXCEPTION(Type, "Version is not newest");
+			if (!tmp && exceptionOnFail) THROW_EXCEPTION(Type, "Version is not newest");
 			return tmp;
 		};
 
@@ -101,7 +101,7 @@ namespace OpenEFW
 		{
 			auto r = oldest();
 			bool tmp = (version > 0 && r.result && version == r.value);
-			if (!tmp && exceptionOnFail) OpenEFW_EXCEPTION(Type, "Version is not oldest");
+			if (!tmp && exceptionOnFail) THROW_EXCEPTION(Type, "Version is not oldest");
 			return tmp;
 		};
 
@@ -112,7 +112,7 @@ namespace OpenEFW
 				if (_tmp() != list.end()) return true;
 			}
 			//for (auto e : list) if (e == version) return true;
-			if (exceptionOnFail) OpenEFW_EXCEPTION(Type, "Version is not available");
+			if (exceptionOnFail) THROW_EXCEPTION(Type, "Version is not available");
 			return false;
 		};
 
