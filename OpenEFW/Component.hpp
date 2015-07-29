@@ -37,8 +37,12 @@
 #include "Delegate.hpp"
 #include "SmartMap.hpp"
 
-#define STR_DNE "does not exists"
-#define STR_FDNE "function" STR_DNE
+// Useful inside a anonym function like : [&](That* that){ ... }
+#ifndef CompAdd
+#define CompAdd(x,y) that->add<x>(#y)
+#define CompGet(x,y) that->get<x>(#y)
+#define CompCall(x,y) that->call<x>(#y)
+#endif
 
 namespace OpenEFW {
 	using ::std::ostream;
@@ -47,7 +51,7 @@ namespace OpenEFW {
 	using ::std::is_trivial;
 	using ::std::is_abstract;
 
-	struct Component {
+	class Component {
 		using This = Component;
 		using Identifer = string;
 
@@ -69,7 +73,7 @@ namespace OpenEFW {
 		};
 
 	protected:
-		string m_id = "?";
+		size_t m_id = 0;
 		bool m_created = false;
 		Component* m_parent = nullptr;
 		void setParent(Component& c) { m_parent = &c; };
@@ -82,23 +86,15 @@ namespace OpenEFW {
 		template<typename T> using List = Collection<Key, T, Key, unordered_map<Key, T, Key>>;
 		
 		using Lists = SmartMap<size_t, Collection<>>;
-		//using Components = SmartMap<Identifer, Component>;
 
 	protected:
 		Lists m_values;
 		Lists m_functions;
 		Lists m_components;
 
-		static Identifer& tmp() { static Identifer id; return id; }
-
-		void setTMP(const Identifer& id) {
-			tmp() = m_id + "::" + id;
-		}
-
 		template<typename T> T& replace(Lists &lists, Identifer id, Identifer old_id) {
-			tmp() = id;
 			auto &key = Key(id);
-			auto mlist = list<T>(lists, true);
+			auto mlist = list<T>(id, lists, true);
 
 			auto &value = mlist->has(key) ? mlist->get(key, true) : mlist->add(key, true);
 			if (old_id != id) add<T>(lists, old_id) = value; // old
@@ -106,13 +102,19 @@ namespace OpenEFW {
 			return value;
 		}
 
-		template<typename T> T& add(Lists &lists, Identifer id) { setTMP(id); return list<T>(lists, true)->add(Key(id)); }
-		template<typename T> bool del(Lists &lists, Identifer id) { setTMP(id); return list<T>(lists, false)->del(Key(id)); }
-		template<typename T> T& get(Lists &lists, Identifer id) { setTMP(id); return list<T>(lists, false)->get(Key(id)); };
+		template<typename T> T& add(Lists &lists, Identifer id) {
+			return list<T>(id, lists, true)->add(Key(id));
+		}
+
+		template<typename T> bool del(Lists &lists, Identifer id) {
+			return list<T>(id, lists, false)->del(Key(id));
+		}
+		template<typename T> T& get(Lists &lists, Identifer id) {
+			return list<T>(id, lists, false)->get(Key(id));
+		};
 
 		template<typename T> bool has(Lists &lists, Identifer id) {
-			setTMP(id);
-			auto mlist = list<T>(lists, false, true);
+			auto mlist = list<T>(id, lists, false, true);
 			return mlist ? mlist->has(Key(id)) : false;
 		};
 
@@ -138,12 +140,12 @@ namespace OpenEFW {
 			In(const Identifer &id, const T &value) : id(id), value(value) {};
 		};
 
-		#define CompNoExist(type) THROW_EXCEPTION(This, "'" + tmp() + " " + type + "' does not exists");
-		#define CompNoCreate(type) THROW_EXCEPTION(This, "'" + tmp() + " " + type + "' could not be created");
-		#define CompNoCast(type) THROW_EXCEPTION(This, "'" + tmp() + " " + type + "' could not be casted");
-		#define CompNoObj(type) THROW_EXCEPTION(This, "can not call '" + tmp() + " " + type+ "' when object is not created");
+#define CompNoExist(type) THROW_EXCEPTION(This, "'[" + *this + "] [" + id + "] " + type + "' does not exists");
+#define CompNoCreate(type) THROW_EXCEPTION(This, "'[" + *this + "] [" + id + "] " + type + "' could not be created");
+#define CompNoAdd(type) THROW_EXCEPTION(This, "'[" + *this + "] [" + id + "] " + type + "' could not be added");
+#define CompNoCast(type) THROW_EXCEPTION(This, "'[" + *this + "] [" + id + "] " +  type + "' could not be casted");
 
-		template<typename T> List<T>* list(Lists &lists, bool create, bool donoexcept = false){
+		template<typename T> List<T>* list(const Identifer& id, Lists &lists, bool create, bool donoexcept = false){
 			static auto hash_code = TypeInfo::Get<T>::hash_code();
 			bool result = lists.has(hash_code);
 
@@ -172,16 +174,18 @@ namespace OpenEFW {
 
 	public:
 
-		string& id() { return m_id; };
+		size_t& id() { return m_id; };
+		void setId(Identifer id) { m_id = hash<Identifer>()(id); };
+
 		Component& parent() { return *m_parent; };
 
 		Lists& values() { return m_values; };
 		Lists& functions() { return m_functions; };
 		Lists& components() { return m_components; };
 
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, List<T>>& list(){ return *list<T>(m_values, false, false); }
-		template<typename T> enable_if_t<CAST<T>::value, List<Function<T>>>&  list(){ return *list<Function<T>>(m_functions, false, false); }
-		template<typename T> enable_if_t<SAME<T>::value, List<This>>& list(){ return *list<T>(m_components, false, false); }
+		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, List<T>>& list(){ return *list<T>("?", m_values, false, false); }
+		template<typename T> enable_if_t<CAST<T>::value, List<Function<T>>>&  list(){ return *list<Function<T>>("?", m_functions, false, false); }
+		template<typename T> enable_if_t<SAME<T>::value, List<This>>& list(){ return *list<T>("?", m_components, false, false); }
 
 		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, T>& replace(Identifer id, Identifer old_id) { return replace<T>(m_values, id, old_id); }
 		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, T>& replace(Identifer id) { return replace<T>(m_values, id, id); }
@@ -198,15 +202,15 @@ namespace OpenEFW {
 		template<typename T> enable_if_t<CAST<T>::value, bool> has(Identifer id) { return has<Function<T>>(m_functions, id); }
 
 		template<typename T> enable_if_t<SAME<T>::value, This>& replace(Identifer id, Identifer old_id) {
-			auto &c = replace<T>(m_components, id, old_id); setParent(c); return c;
+			auto &c = replace<T>(m_components, id, old_id); c.setId(id); setParent(c); return c;
 		}
 
 		template<typename T> enable_if_t<SAME<T>::value, This>& replace(Identifer id) {
-			auto &c = replace<T>(m_components, id, id); setParent(c); return c;
+			auto &c = replace<T>(m_components, id, id); c.setId(id); setParent(c); return c;
 		}
 
 		template<typename T> enable_if_t<SAME<T>::value, This>& add(Identifer id) {
-			auto &c = add<T>(m_components, id); setParent(c); return c;
+			auto &c = add<T>(m_components, id); c.setId(id); setParent(c); return c;
 		}
 
 		template<typename T> enable_if_t<SAME<T>::value, bool> del(Identifer id) { return del<T>(m_components, id); }
@@ -214,27 +218,34 @@ namespace OpenEFW {
 		template<typename T> enable_if_t<SAME<T>::value, bool> has(Identifer id) { return has<T>(m_components, id); }
 
 		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, Function<T>>&
-		get() {
-			setTMP("@static");
+		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, void>
+		add(Function<T> f) {
 			auto& current = Static<I>::function<I, T>();
-			if (!current) CompNoExist(Static<I>::geType<T>());
-			return current;
+			if (!current) current = f;
 		};
 
 		template<typename I, typename T>
 		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, Function<T>>&
-		add() {
-			setTMP("@static");
+		get() {
+			static Identifer id = "@static";
 			auto& current = Static<I>::function<I, T>();
-			if (current) CompNoExist(Static<I>::geType<T>());
+			if (!current) CompNoExist(Static<I>::geType<T>());
+			return current;
+		};
+		
+		template<typename I, typename T>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, Function<T>>&
+		add() {
+			static Identifer id = "@static";
+			auto& current = Static<I>::function<I, T>();
+			if (current) CompNoAdd(Static<I>::geType<T>());
 			return current;
 		};
 
 		template<typename I, typename J = void, typename T>
 		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value && !is_same<I, J>::value, Function<T>>&
 		replace() {
-			setTMP("@static");
+			static Identifer id = "@static";
 			auto& func = Static<I>::function<I, T>();
 			if (!func) CompNoExist(Static<I>::geType<T>());
 			auto& oldfunc = Static<I>::function<J, T>();
@@ -245,16 +256,13 @@ namespace OpenEFW {
 		template<typename I, typename R = void, typename ...A>
 		enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
 		call(A... args){
-			setTMP("@static");
-			if (!m_created) CompNoObj(Static<I>::geType<R(A...)>());
+			static Identifer id = "@static";
 			auto f = Static<I>::function<I, R(A...)>();
 			if (!f) CompNoExist(Static<I>::geType<R(A...)>());
 			return (f)(this, forward<A>(args)...);
 		};
 
 		template<typename R = void, typename ...A> R call(Identifer id, A... args){
-			setTMP(id);
-			if (!m_created) CompNoObj(TypeInfo::Get<R(A...)>::str());
 			if (!has<R(A...)>(id)) CompNoExist(TypeInfo::Get<R(A...)>::str());
 			return get<R(A...)>(id)(this, forward<A>(args)...);
 		};
@@ -270,20 +278,25 @@ namespace OpenEFW {
 		template<typename T> This& operator=(const In<Function<T>> in){ replace<T>(in.id) = in.value; return *this; };
 		template<typename T> This& operator=(const In<T> in){ replace<T>(in.id) = in.value; return *this; };
 
-		This& operator=(const In<This>& in){ replace<This>(in.id) = in.value; return *this; };
+		This& operator+=(const In<This>& in){ replace<This>(in.id) = in.value; return *this; };
 		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; };
+		bool operator==(const This& other){ return m_id == other.m_id; };
+		bool operator==(const decltype(m_id)& other){ return m_id == other; };
+		bool operator==(const Identifer& other){ return m_id == hash<Identifer>()(other); };
+		bool operator!=(const This& other){ return !(*this == other); };
+		bool operator!=(const decltype(m_id)& other){ return !(*this == other); };
+		bool operator!=(const Identifer& other){ return !(*this == other); };
 
-		void operator()() {
-			if (!m_created) m_created = true;
+		void operator()() { create(); };
 
-			if (has<void()>("@create")) call("@create");
+		friend string operator+(const char* other, This& o) { return other + o.str(); };
+		friend string operator+(string &other, This& o) { return other + o.str(); };
+		friend void operator+=(string &other, This& o) { other += o.str(); };
 
-			auto list = m_components.getByIndex(0);
-			auto components = list ? list->get<List<This>>() : nullptr;
-			if (components) for (auto &e : components->map) e.second();
-		};
+		friend ostream& operator<<(ostream &other, This& o) { return other << "Component [" + o + "]"; };
 
-		friend ostream & operator<<(ostream &os, This& o) { return os << "Component '" << o.id() << "'"; };
+		string str() { return to_string(m_id); }
+		const char* c_str() { static string s; s = str(); return s.c_str(); }
 
 	protected:
 
@@ -318,15 +331,28 @@ namespace OpenEFW {
 			saved.setRemover([&](const Lists::Id& id, const Lists::Type &obj){});
 		}
 
+		void create()
+		{
+			if (!m_created) m_created = true;
+
+			if (has<void()>("@create")) call("@create");
+
+			auto list = m_components.getByIndex(0);
+			auto components = list ? list->get<List<This>>() : nullptr;
+			if (components) for (auto &e : components->map) e.second();
+		};
+
 	public:
 
 		void copy(This& other){
-			copy(m_values, other.m_values);
-			copy(m_functions, other.m_functions);
-			copy(m_components, other.m_components);
 			m_id = other.m_id;
 			if (!m_created) m_created = other.m_created;
 			if (!m_parent) m_parent = other.m_parent;
+
+			copy(m_values, other.m_values);
+			copy(m_functions, other.m_functions);
+			copy(m_components, other.m_components);
+
 			if (m_created && has<void()>("@copy")) call("@copy");
 		};
 
@@ -334,6 +360,7 @@ namespace OpenEFW {
 			steal(m_values, other.m_values);
 			steal(m_functions, other.m_functions);
 			steal(m_components, other.m_components);
+
 			if (m_created && has<void()>("@steal")) call("@steal");
 		};
 
@@ -341,6 +368,7 @@ namespace OpenEFW {
 			swap(m_values, other.m_values);
 			swap(m_functions, other.m_functions);
 			swap(m_components, other.m_components);
+
 			if (m_created && has<void()>("@swap")) call("@swap");
 		};
 
@@ -356,15 +384,21 @@ namespace OpenEFW {
 			resetComponents();
 		}
 	
-		void preset() {
-			if (!has<void()>("@create")) add<void()>("@create") = [](This*){};
-			if (!has<void()>("@delete")) add<void()>("@delete") = [](This*){};
-			if (!has<void()>("@copy")) add<void()>("@copy") = [](This*){};
-			if (!has<void()>("@steal")) add<void()>("@steal") = [](This*){};
-			if (!has<void()>("@swap")) add<void()>("@swap") = [](This*){};
+		static void preset(Component& c) {
+			if (!c.has<void()>("@create")) c.add<void()>("@create") = [](This*){};
+			if (!c.has<void()>("@delete")) c.add<void()>("@delete") = [](This*){};
+			if (!c.has<void()>("@copy")) c.add<void()>("@copy") = [](This*){};
+			if (!c.has<void()>("@steal")) c.add<void()>("@steal") = [](This*){};
+			if (!c.has<void()>("@swap")) c.add<void()>("@swap") = [](This*){};
 		};
 
 		Component() = default;
+		Component(const This& other) { copy(const_cast<This&>(other)); };
+
+		explicit Component(Identifer id) { setId(id); };
+		explicit Component(bool usepreset) { if (usepreset) preset(*this); };
+		explicit Component(Identifer id, bool usepreset) { setId(id); if (usepreset) preset(*this); };
+
 		~Component() { if (m_created && has<void()>("@delete")) call("@delete"); };
 	};
 };
