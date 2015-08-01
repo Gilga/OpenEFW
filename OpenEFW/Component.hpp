@@ -291,12 +291,10 @@ namespace OpenEFW {
 			return (f)(this, forward<A>(args)...);
 		};
 
-		#define ComponentConstructor \
-		This() = default; \
+		#define ComponentConstructor(x) \
+		This() { setId(#x); }; \
 		This(const This& other) { copy(const_cast<This&>(other)); }; \
-		explicit This(Identifer id) { setId(id); }; \
-		explicit This(bool usepreset) { if (usepreset) preset(*this); }; \
-		explicit This(Identifer id, bool usepreset) { setId(id); if (usepreset) preset(*this); };
+		explicit This(bool usepreset) { setId(#x); if (usepreset) preset(*this); }; \
 
 		#define ComponentOperators \
 		template<typename T> This& operator=(const In<Function<T>> in){ replace<T>(in.id) = in.value; return *this; }; \
@@ -315,15 +313,21 @@ namespace OpenEFW {
 		friend void operator+=(string &other, This& o) { other += o.str(); }; \
 		friend ostream& operator<<(ostream &other, This& o) { return other << "Component [" + o + "]"; };
 
-		#define NewComponent \
+		#define NewComponent(x) \
 		SetUnknownClass\
+		public: using This = x; \
 		public: ComponentOperators\
-		public: ComponentConstructor
+		public: ComponentConstructor(x)
 
 		// set operators and constructors
 
 		ComponentOperators
-		ComponentConstructor
+
+		This() = default; \
+		This(const This& other) { copy(const_cast<This&>(other)); }; \
+		explicit This(Identifer id) { setId(id); }; \
+		explicit This(bool usepreset) { if (usepreset) preset(*this); }; \
+		explicit This(Identifer id, bool usepreset) { setId(id); if (usepreset) preset(*this); };
 
 		~Component() { if (m_created && has<void()>("@delete")) call("@delete"); };
 
