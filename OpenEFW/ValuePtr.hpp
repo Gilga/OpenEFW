@@ -31,7 +31,7 @@
 #ifndef __OPENEFW_DATAVALUEPTR_HPP__
 #define __OPENEFW_DATAVALUEPTR_HPP__
 
-#include <memory>
+//#include "type_memory.hpp"
 
 #include "exception.hpp"
 #include "typeinfo.hpp"

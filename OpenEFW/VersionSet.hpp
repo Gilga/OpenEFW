@@ -31,17 +31,15 @@
 #ifndef __OPENEFW_VERSION_SET_HPP__
 #define __OPENEFW_VERSION_SET_HPP__
 
-#include <set>
-
+#include "type_lists.hpp"
 #include "exception.hpp"
-#include "macros/exception.hpp"
 
 namespace OpenEFW
 {
 	template<typename T> class VersionSet {
 	public:
 		using Type = T;
-		using List = std::set<Type>;
+		using List = set<Type>;
 
 		struct Result {
 			bool result = false;

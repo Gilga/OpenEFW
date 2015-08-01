@@ -32,7 +32,6 @@
 #define __OPENEFW_UNBOUNDCLASS_HPP__
 
 #include "Delegate.hpp"
-#include "macros/exception.hpp"
 
 namespace OpenEFW
 {

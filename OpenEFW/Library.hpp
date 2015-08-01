@@ -31,27 +31,29 @@
 #ifndef __OPENEFW_LIBRARY_HPP__
 #define __OPENEFW_LIBRARY_HPP__
 
-#include "UnknownClass.hpp"
+#include "Component.hpp"
 #include "VersionSet.hpp"
-#include "FunctionList.hpp"
-#include "ObjectGenerator.hpp"
 
 namespace OpenEFW
 {
-	template<typename ...A> class Library;
-
-	/*! A template class for libraries */
-	template<> class Library<> : public UnknownClass {
-		OpenEFW_SetCurrentClass
+	template<typename T> class Library : public Component {
+		SetUnknownClass
 
 	public:
-		using version_t = size_t;
+		using Type = T;
+		using Super = Component;
+		using This = Library<T>;
+		using Versions = VersionSet<size_t>;
 
-		using This = Library<>;
-		using Versions = VersionSet<version_t>;
+	protected:
+		Versions versions;
 
-		bool hasVersion(version_t version){ return versions.has(version); }; // check cetain version of library
-		void useVersion(version_t version) { versions.use() = version; }; // check version of library
+	public:
+		Library(){ m_typeinfo.set<T>(); };
+		virtual ~Library(){};
+
+		bool hasVersion(size_t version) { return versions.has(version); }; // check cetain version of library
+		void useVersion(size_t version) { versions.use() = version; }; // check version of library
 
 		bool checkVersion(bool exceptionOnFail = false)  // check current version of library
 		{
@@ -60,55 +62,10 @@ namespace OpenEFW
 			return has;
 		}
 
-		// count of functions in list
-		inline size_t count() const { return list.count(); };
-
-		// get base function
-		inline FunctionList::BaseFunction* get(const string &name) { return list.get(name); };
-
-		// remove function
-		inline bool remove(const string &name) { return list.remove(name); };
-
-		// set function
-		template<typename T, typename F> inline void set(const string &name, F func) { list.set<T, F>(name, func); };
-
-		// get function
-		template<typename T> inline FunctionList::Function<T>* function(const string &name) { return list.function<T>(name); };
-
-		// call function
-		template<typename R = void, typename ...A> inline R call(const string &name, A... args) {
-			auto f = function<R(A...)>(name);
-			if (!f) THROW_EXCEPTION(R(A...), "function " + name + " not found in lib " + m_typeinfo.type_name());
-			return (*f)(forward<A>(args)...);
-		};
-
-		template<typename T> Library<T>* get()
-		{
-			if (m_typeinfo.hash_code() == TypeInfo<T>::hash_code()) return static_cast<Library<T>*>(this);
-			return nullptr;
-		};
-
-		virtual ~Library(){ Destructor(); };
-
-		virtual void initialize() {};
-		virtual void terminate() {};
-
-	protected:
-		virtual void Destructor() { clear(); };
-
-		inline void clear() { list.clear(); versions.clear(); };
-
-		Versions versions;
-		FunctionList list;
-	};
-
-	template<typename T> struct Library<T> : public Library<>{
-		using Type = T;
-		using Super = Library<>;
-		using This = Library<T>;
-
-		Library(){ m_typeinfo.set<T>(); };
-		virtual ~Library(){};
+		template<typename I, typename T> ComponentStaticReturnFunction get() { return Super::get<This, I, T>(); };
+		template<typename I, typename T> ComponentStaticReturnFunction add() { return Super::add<This, I, T>(); };
+		template<typename I, typename J = void, typename T> ComponentStaticReplaceFunction replace() { return Super::replace<This, I, J, T>(); };
+		template<typename I, typename R = void, typename ...A> ComponentStaticCall call(A... args) { return Super::call<This, I, R, A...>(forward<A>(args)...); };
 	};
 };
 

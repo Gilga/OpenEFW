@@ -31,15 +31,14 @@
 #ifndef __OPENEFW_EXCEPTION_HPP__
 #define __OPENEFW_EXCEPTION_HPP__
 
-#include <string>
-#include <exception>
+#include "macros/exception.hpp"
+
+#include "type_exception.hpp"
 
 #include "typeinfo.hpp"
 
 namespace OpenEFW
 {
-	using ::std::exception;
-	
 	namespace ExceptionSettings {
 		static bool& showClass() { static bool show = true; return show; };
 		static bool& showLine() { static bool show = false; return show; };

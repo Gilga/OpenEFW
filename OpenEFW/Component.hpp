@@ -31,11 +31,12 @@
 #ifndef __OPENEFW_COMPONENT_HPP__
 #define __OPENEFW_COMPONENT_HPP__
 
-#include <ostream>
-
 #include "Collection.hpp"
-#include "Delegate.hpp"
 #include "SmartMap.hpp"
+
+#include "type_ios.hpp"
+#include "type_traits.hpp"
+#include "type_functional.hpp"
 
 // Useful inside a anonym function like : [&](That* that){ ... }
 #ifndef CompAdd
@@ -45,13 +46,11 @@
 #endif
 
 namespace OpenEFW {
-	using ::std::ostream;
-	using ::std::binary_function;
-	using ::std::is_constructible;
-	using ::std::is_trivial;
-	using ::std::is_abstract;
+	class Component : public UnknownClass {
+		SetUnknownClass
 
-	class Component {
+	protected:
+
 		using This = Component;
 		using Identifer = string;
 
@@ -72,11 +71,10 @@ namespace OpenEFW {
 			bool operator()(const Key& lhs, const Key& rhs) const { return lhs == rhs; };
 		};
 
-	protected:
 		size_t m_id = 0;
 		bool m_created = false;
-		Component* m_parent = nullptr;
-		void setParent(Component& c) { m_parent = &c; };
+		This* m_parent = nullptr;
+		void setParent(This& c) { m_parent = &c; };
 
 		template<typename ...> struct ComponentFunction;
 		template<typename T, typename ...A> struct ComponentFunction<T(A...)> { using Type = Delegate<T(This*, A...)>; };
@@ -163,7 +161,7 @@ namespace OpenEFW {
 			}
 
 			auto mlist = lists.get(hash_code);
-			auto nlist = mlist ? mlist->get<List<T>>() : nullptr;
+			auto nlist = mlist ? mlist->reconvert<List<T>>() : nullptr;
 			if (!nlist){
 				if (donoexcept) return nullptr;
 				CompNoCast(TypeInfo::Get<List<T>>::str());
@@ -177,90 +175,74 @@ namespace OpenEFW {
 		size_t& id() { return m_id; };
 		void setId(Identifer id) { m_id = hash<Identifer>()(id); };
 
-		Component& parent() { return *m_parent; };
+		This& parent() { return *m_parent; };
 
 		Lists& values() { return m_values; };
 		Lists& functions() { return m_functions; };
 		Lists& components() { return m_components; };
 
+		#define ComponentReturnValue enable_if_t<BUILD<T>::value && !SAME<T>::value, T>&
+		#define ComponentReturnHasValue enable_if_t<BUILD<T>::value && !SAME<T>::value, bool>
+
+		#define ComponentReturnFunction enable_if_t<CAST<T>::value, Function<T>>&
+		#define ComponentReturnHasFunction enable_if_t<CAST<T>::value, bool>
+
+		#define ComponentReturnComponent enable_if_t<SAME<T>::value, This>&
+		#define ComponentReturnHasComponent enable_if_t<SAME<T>::value, bool>
+
+		#define ComponentStaticReturnFunction enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, Function<T>>&
+		#define ComponentStaticReplaceFunction enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value && !is_same<I, J>::value, Function<T>>&
+		#define ComponentStaticCall enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
+
 		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, List<T>>& list(){ return *list<T>("?", m_values, false, false); }
 		template<typename T> enable_if_t<CAST<T>::value, List<Function<T>>>&  list(){ return *list<Function<T>>("?", m_functions, false, false); }
 		template<typename T> enable_if_t<SAME<T>::value, List<This>>& list(){ return *list<T>("?", m_components, false, false); }
 
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, T>& replace(Identifer id, Identifer old_id) { return replace<T>(m_values, id, old_id); }
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, T>& replace(Identifer id) { return replace<T>(m_values, id, id); }
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, T>& add(Identifer id) { return add<T>(m_values, id); }
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, bool> del(Identifer id) { return del<T>(m_values, id); }
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, T>& get(Identifer id) { return get<T>(m_values, id); }
-		template<typename T> enable_if_t<BUILD<T>::value && !SAME<T>::value, bool> has(Identifer id) { return has<T>(m_values, id); }
+		template<typename T> ComponentReturnValue replace(Identifer id, Identifer old_id) { return replace<T>(m_values, id, old_id); }
+		template<typename T> ComponentReturnValue replace(Identifer id) { return replace<T>(m_values, id, id); }
+		template<typename T> ComponentReturnValue add(Identifer id) { return add<T>(m_values, id); }
+		template<typename T> ComponentReturnValue get(Identifer id) { return get<T>(m_values, id); }
+		template<typename T> ComponentReturnHasValue del(Identifer id) { return del<T>(m_values, id); }
+		template<typename T> ComponentReturnHasValue has(Identifer id) { return has<T>(m_values, id); }
 
-		template<typename T> enable_if_t<CAST<T>::value, Function<T>>& replace(Identifer id, Identifer old_id) { return replace<Function<T>>(m_functions, id, old_id); }
-		template<typename T> enable_if_t<CAST<T>::value, Function<T>>& replace(Identifer id) { return replace<Function<T>>(m_functions, id, id); }
-		template<typename T> enable_if_t<CAST<T>::value, Function<T>>& add(Identifer id) { return add<Function<T>>(m_functions, id); }
-		template<typename T> enable_if_t<CAST<T>::value, bool> del(Identifer id) { return del<Function<T>>(m_functions, id); }
-		template<typename T> enable_if_t<CAST<T>::value, Function<T>>& get(Identifer id) { return get<Function<T>>(m_functions, id); }
-		template<typename T> enable_if_t<CAST<T>::value, bool> has(Identifer id) { return has<Function<T>>(m_functions, id); }
+		template<typename T> ComponentReturnFunction replace(Identifer id, Identifer old_id) { return replace<Function<T>>(m_functions, id, old_id); }
+		template<typename T> ComponentReturnFunction replace(Identifer id) { return replace<Function<T>>(m_functions, id, id); }
+		template<typename T> ComponentReturnFunction add(Identifer id) { return add<Function<T>>(m_functions, id); }
+		template<typename T> ComponentReturnFunction get(Identifer id) { return get<Function<T>>(m_functions, id); }
+		template<typename T> ComponentReturnHasFunction del(Identifer id) { return del<Function<T>>(m_functions, id); }
+		template<typename T> ComponentReturnHasFunction has(Identifer id) { return has<Function<T>>(m_functions, id); }
 
-		template<typename T> enable_if_t<SAME<T>::value, This>& replace(Identifer id, Identifer old_id) {
-			auto &c = replace<T>(m_components, id, old_id); c.setId(id); setParent(c); return c;
+		template<typename T> ComponentReturnComponent replace(Identifer id, Identifer old_id) {
+			auto &c = replace<T>(m_components, id, old_id);
+			c.setId(id);
+			setParent(c);
+			return c;
 		}
 
-		template<typename T> enable_if_t<SAME<T>::value, This>& replace(Identifer id) {
-			auto &c = replace<T>(m_components, id, id); c.setId(id); setParent(c); return c;
+		template<typename T> ComponentReturnComponent replace(Identifer id) {
+			auto &c = replace<T>(m_components, id, id);
+			c.setId(id);
+			setParent(c);
+			return c;
 		}
 
-		template<typename T> enable_if_t<SAME<T>::value, This>& add(Identifer id) {
-			auto &c = add<T>(m_components, id); c.setId(id); setParent(c); return c;
+		template<typename T> ComponentReturnComponent add(Identifer id) {
+			auto &c = add<T>(m_components, id);
+			c.setId(id);
+			setParent(c);
+			return c;
 		}
 
-		template<typename T> enable_if_t<SAME<T>::value, bool> del(Identifer id) { return del<T>(m_components, id); }
-		template<typename T> enable_if_t<SAME<T>::value, This>& get(Identifer id) { return get<T>(m_components, id); }
-		template<typename T> enable_if_t<SAME<T>::value, bool> has(Identifer id) { return has<T>(m_components, id); }
+		template<typename T> ComponentReturnComponent get(Identifer id) { return get<T>(m_components, id); }
+		template<typename T> ComponentReturnHasComponent del(Identifer id) { return del<T>(m_components, id); }
+		template<typename T> ComponentReturnHasComponent has(Identifer id) { return has<T>(m_components, id); }
 
-		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, void>
-		add(Function<T> f) {
-			auto& current = Static<I>::function<I, T>();
-			if (!current) current = f;
-		};
-
-		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, Function<T>>&
-		get() {
-			static Identifer id = "@static";
-			auto& current = Static<I>::function<I, T>();
-			if (!current) CompNoExist(Static<I>::geType<T>());
-			return current;
-		};
-		
-		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, Function<T>>&
-		add() {
-			static Identifer id = "@static";
-			auto& current = Static<I>::function<I, T>();
-			if (current) CompNoAdd(Static<I>::geType<T>());
-			return current;
-		};
-
-		template<typename I, typename J = void, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value && !is_same<I, J>::value, Function<T>>&
-		replace() {
-			static Identifer id = "@static";
-			auto& func = Static<I>::function<I, T>();
-			if (!func) CompNoExist(Static<I>::geType<T>());
-			auto& oldfunc = Static<I>::function<J, T>();
-			oldfunc = func;
-			return func;
-		};
-
-		template<typename I, typename R = void, typename ...A>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
-		call(A... args){
-			static Identifer id = "@static";
-			auto f = Static<I>::function<I, R(A...)>();
-			if (!f) CompNoExist(Static<I>::geType<R(A...)>());
-			return (f)(this, forward<A>(args)...);
-		};
+		//template<typename I, typename T>
+		//enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, void>
+		//add(Function<T> f) {
+		//	auto& current = Static<I>::function<I, T>();
+		//	if (!current) current = f;
+		//};
 
 		template<typename R = void, typename ...A> R call(Identifer id, A... args){
 			if (!has<R(A...)>(id)) CompNoExist(TypeInfo::Get<R(A...)>::str());
@@ -275,25 +257,75 @@ namespace OpenEFW {
 			}
 		}
 
-		template<typename T> This& operator=(const In<Function<T>> in){ replace<T>(in.id) = in.value; return *this; };
-		template<typename T> This& operator=(const In<T> in){ replace<T>(in.id) = in.value; return *this; };
+		template<typename C, typename I, typename T> ComponentStaticReturnFunction get() {
+			using Func = Static<Tags<This, C>>;
+			static Identifer id = "@static";
+			auto& current = Func::function<I, T>();
+			if (!current) CompNoExist(Func::geType<T>());
+			return current;
+		};
 
-		This& operator+=(const In<This>& in){ replace<This>(in.id) = in.value; return *this; };
-		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; };
-		bool operator==(const This& other){ return m_id == other.m_id; };
-		bool operator==(const decltype(m_id)& other){ return m_id == other; };
-		bool operator==(const Identifer& other){ return m_id == hash<Identifer>()(other); };
-		bool operator!=(const This& other){ return !(*this == other); };
-		bool operator!=(const decltype(m_id)& other){ return !(*this == other); };
-		bool operator!=(const Identifer& other){ return !(*this == other); };
+		template<typename C, typename I, typename T> ComponentStaticReturnFunction add() {
+			using Func = Static<Tags<This, C>>;
+			static Identifer id = "@static";
+			auto& current = Func::function<I, T>();
+			if (current) CompNoAdd(Func::geType<T>());
+			return current;
+		};
 
-		void operator()() { create(); };
+		template<typename C, typename I, typename J = void, typename T> ComponentStaticReplaceFunction replace() {
+			using Func = Static<Tags<This, C>>;
+			static Identifer id = "@static";
+			auto& func = Func::function<I, T>();
+			if (!func) CompNoExist(Static<I>::geType<T>());
+			auto& oldfunc = Func::function<J, T>();
+			oldfunc = func;
+			return func;
+		};
 
-		friend string operator+(const char* other, This& o) { return other + o.str(); };
-		friend string operator+(string &other, This& o) { return other + o.str(); };
-		friend void operator+=(string &other, This& o) { other += o.str(); };
+		template<typename C, typename I, typename R = void, typename ...A> ComponentStaticCall call(A... args) {
+			using Func = Static<Tags<This, C>>;
+			static Identifer id = "@static";
+			auto f = Func::function<I, R(A...)>();
+			if (!f) CompNoExist(Func::geType<R(A...)>());
+			return (f)(this, forward<A>(args)...);
+		};
 
+		#define ComponentConstructor \
+		This() = default; \
+		This(const This& other) { copy(const_cast<This&>(other)); }; \
+		explicit This(Identifer id) { setId(id); }; \
+		explicit This(bool usepreset) { if (usepreset) preset(*this); }; \
+		explicit This(Identifer id, bool usepreset) { setId(id); if (usepreset) preset(*this); };
+
+		#define ComponentOperators \
+		template<typename T> This& operator=(const In<Function<T>> in){ replace<T>(in.id) = in.value; return *this; }; \
+		template<typename T> This& operator=(const In<T> in){ replace<T>(in.id) = in.value; return *this; }; \
+		This& operator+=(const In<This>& in){ replace<This>(in.id) = in.value; return *this; }; \
+		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; }; \
+		bool operator==(const This& other){ return m_id == other.m_id; }; \
+		bool operator==(const decltype(m_id)& other){ return m_id == other; }; \
+		bool operator==(const Identifer& other){ return m_id == hash<Identifer>()(other); }; \
+		bool operator!=(const This& other){ return !(*this == other); }; \
+		bool operator!=(const decltype(m_id)& other){ return !(*this == other); }; \
+		bool operator!=(const Identifer& other){ return !(*this == other); }; \
+		void operator()() { create(); }; \
+		friend string operator+(const char* other, This& o) { return other + o.str(); }; \
+		friend string operator+(string &other, This& o) { return other + o.str(); }; \
+		friend void operator+=(string &other, This& o) { other += o.str(); }; \
 		friend ostream& operator<<(ostream &other, This& o) { return other << "Component [" + o + "]"; };
+
+		#define NewComponent \
+		SetUnknownClass\
+		public: ComponentOperators\
+		public: ComponentConstructor
+
+		// set operators and constructors
+
+		ComponentOperators
+		ComponentConstructor
+
+		~Component() { if (m_created && has<void()>("@delete")) call("@delete"); };
 
 		string str() { return to_string(m_id); }
 		const char* c_str() { static string s; s = str(); return s.c_str(); }
@@ -338,7 +370,7 @@ namespace OpenEFW {
 			if (has<void()>("@create")) call("@create");
 
 			auto list = m_components.getByIndex(0);
-			auto components = list ? list->get<List<This>>() : nullptr;
+			auto components = list ? list->reconvert<List<This>>() : nullptr;
 			if (components) for (auto &e : components->map) e.second();
 		};
 
@@ -391,15 +423,6 @@ namespace OpenEFW {
 			if (!c.has<void()>("@steal")) c.add<void()>("@steal") = [](This*){};
 			if (!c.has<void()>("@swap")) c.add<void()>("@swap") = [](This*){};
 		};
-
-		Component() = default;
-		Component(const This& other) { copy(const_cast<This&>(other)); };
-
-		explicit Component(Identifer id) { setId(id); };
-		explicit Component(bool usepreset) { if (usepreset) preset(*this); };
-		explicit Component(Identifer id, bool usepreset) { setId(id); if (usepreset) preset(*this); };
-
-		~Component() { if (m_created && has<void()>("@delete")) call("@delete"); };
 	};
 };
 

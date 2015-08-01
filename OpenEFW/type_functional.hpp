@@ -28,59 +28,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_HASH_MAP_HPP__
-#define __OPENEFW_HASH_MAP_HPP__
+#ifndef __OPENEFW_TYPE_FUNCTIONAL_HPP__
+#define __OPENEFW_TYPE_FUNCTIONAL_HPP__
 
-#include "type_lists.hpp"
-
-#ifdef _USE_BOOST
-#include <boost/multi_index/hashed_index_fwd.hpp>
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/identity.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index/member.hpp>
-
-#include <iostream>
+#include <functional>
 
 namespace OpenEFW
 {
-	#define BOOST_MI ::boost::multi_index
-
-	template<typename Tag, typename Item> using hash_map2 = ::std::unordered_map<Tag, Item>;
-
-	template<typename Key, typename Item> using hash_map = BOOST_MI::multi_index_container <
-		::std::pair<Key, Item>,
-		BOOST_MI::indexed_by< 
-		BOOST_MI::hashed_unique<BOOST_MI::member<::std::pair<Key, Item>, Key, &::std::pair<Key, Item>::first>>,
-		BOOST_MI::sequenced<>
-		>>;
-
-	static void test_hash_map() {
-		::std::unordered_map<::std::string, int> mm;
-		mm.begin()->first;
-
-		using Map = hash_map<::std::string, int>;
-		using Pair = ::std::pair<std::string, int>;
-		Map hm;
-		hm.insert(Pair("ZUI", 341));
-
-		int &sds = hm.begin()->second; // TODO: int& instead of const int
-
-		if (hm.find("ZUI") != hm.end()) ::std::cout << "V: " << hm.begin()->second << ::std::endl;
-		
-		//for (Map::iterator it = hm.begin(); it != hm.end(); ++it) { ::std:: cout << "V: " << it.get_node()->value << ::std::endl; };
-		//hm.find("hi");
-	}
+	using ::std::binary_function;
+	using ::std::hash;
 };
-
-#else
-
-namespace OpenEFW
-{
-	template<typename Tag, typename Item> using hash_map = unordered_map<Tag, Item>;
-};
-
-#endif
 
 #endif

@@ -31,14 +31,10 @@
 #ifndef __OPENEFW_STRINGREPLACE_HPP__
 #define __OPENEFW_STRINGREPLACE_HPP__
 
-#include <string>
+#include "type_string.hpp"
 
 namespace OpenEFW
 {
-	using ::std::size_t;
-	using ::std::string;
-	using ::std::to_string;
-	
 	struct String {
 		static void replaceAll(string& str, const string& from, const string& to) {
 			if(from.empty())

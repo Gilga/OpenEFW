@@ -28,40 +28,27 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*
-Replacement for std::function, because its FASTER!
-http://codereview.stackexchange.com/questions/14730/impossibly-fast-delegate-in-c11
-http://www.codeproject.com/Articles/11015/The-Impossibly-Fast-C-Delegates
-http://www.codeproject.com/Articles/7150/Member-Function-Pointers-and-the-Fastest-Possible
+	This class is an own invention of the delegate class (replacement for std::function)
+	http://codereview.stackexchange.com/questions/14730/impossibly-fast-delegate-in-c11
+	http://www.codeproject.com/Articles/11015/The-Impossibly-Fast-C-Delegates
+	http://www.codeproject.com/Articles/7150/Member-Function-Pointers-and-the-Fastest-Possible
 */
 #pragma once
 #ifndef __OPENEFW_DELEGATE_HPP__
 #define __OPENEFW_DELEGATE_HPP__
 
-#include <memory>
+#include "type_traits.hpp"
+#include "type_functional.hpp"
+#include "type_utility.hpp"
+#include "type_memory.hpp"
 
 #include "exception.hpp"
-#include "typeinfo.hpp"
 #include "hash_map.hpp"
 
 #include "macros/file_x.hpp"
 
 namespace OpenEFW
 {
-	using ::std::true_type;
-	using ::std::false_type;
-	using ::std::nullptr_t;
-	using ::std::enable_if;
-	using ::std::enable_if_t;
-	using ::std::is_class;
-	using ::std::is_same;
-	using ::std::decay;
-	using ::std::forward;
-	using ::std::pair;
-	using ::std::swap;
-	using ::std::hash;
-	using ::std::shared_ptr;
-	using ::std::is_convertible;
-
 	template <typename ...T> class Delegate;
 
 	template<> class Delegate<> {
@@ -97,22 +84,24 @@ namespace OpenEFW
 		void default() { m_typeinfo.set<R(A...)>(); };
 
 		Delegate(void* const o, stub_ptr_type const m) _NOEXCEPT :
-		object_ptr_(o), stub_ptr_(m) { default(); }
+		m_object_ptr(o), m_stub_ptr(m) { default(); }
 
 	public:
 		Delegate() { default(); } // = default;
 
 		Delegate(Delegate const&) = default;
 
-		//Delegate(Delegate&&) = default;
+		// This won't work (tested in MSVC)
+		//Delegate(Delegate&&) = default; 
+		//Delegate& operator=(Delegate&&) = default;
 
 		Delegate(nullptr_t const) _NOEXCEPT : Delegate() {}
 
 		template <class C, typename = typename enable_if< is_class<C>::value>::type>
-		explicit Delegate(C const* const o) _NOEXCEPT : object_ptr_(const_cast<C*>(o)) { default(); }
+		explicit Delegate(C const* const o) _NOEXCEPT : m_object_ptr(const_cast<C*>(o)) { default(); }
 
 		template <class C, typename = typename enable_if< is_class<C>::value>::type>
-		explicit Delegate(C const& o) _NOEXCEPT : object_ptr_(const_cast<C*>(&o)) { default(); }
+		explicit Delegate(C const& o) _NOEXCEPT : m_object_ptr(const_cast<C*>(&o)) { default(); }
 
 		template <class C>
 		Delegate(C* const object_ptr, R(C::* const method_ptr)(A...)) {
@@ -140,32 +129,30 @@ namespace OpenEFW
 		
 		template <typename T, typename = typename enable_if<!is_same<Delegate, typename decay<T>::type>::value>::type>
 		Delegate(T&& f) :
-		store_(operator new(sizeof(typename decay<T>::type)),
+		m_store(operator new(sizeof(typename decay<T>::type)),
 		functor_deleter<typename decay<T>::type>),
-		store_size_(sizeof(typename decay<T>::type))
+		m_store_size(sizeof(typename decay<T>::type))
 		{
 			using functor_type = typename decay<T>::type;
 			default();
 
-			new (store_.get()) functor_type(forward<T>(f));
+			new (m_store.get()) functor_type(forward<T>(f));
 
-			object_ptr_ = store_.get();
-			stub_ptr_ = functor_stub<functor_type>;
-			deleter_ = deleter_stub<functor_type>;
+			m_object_ptr = m_store.get();
+			m_stub_ptr = functor_stub<functor_type>;
+			m_deleter = deleter_stub<functor_type>;
 		}
 
 		Delegate& operator=(Delegate const&) = default;
 
-		//Delegate& operator=(Delegate&&) = default;
-
 		template <class C>
 		Delegate& operator=(R(C::* const rhs)(A...)){
-			return *this = from(static_cast<C*>(object_ptr_), rhs);
+			return *this = from(static_cast<C*>(m_object_ptr), rhs);
 		}
 
 		template <class C>
 		Delegate& operator=(R(C::* const rhs)(A...) const) {
-			return *this = from(static_cast<C const*>(object_ptr_), rhs);
+			return *this = from(static_cast<C const*>(m_object_ptr), rhs);
 		}
 
 		template <typename T, typename = typename enable_if<!is_same<Delegate, typename decay<T>::type>::value>::type>
@@ -173,22 +160,22 @@ namespace OpenEFW
 		{
 			using functor_type = typename decay<T>::type;
 
-			if ((sizeof(functor_type) > store_size_) || !store_.unique())
+			if ((sizeof(functor_type) > m_store_size) || !m_store.unique())
 			{
-				store_.reset(operator new(sizeof(functor_type)),
+				m_store.reset(operator new(sizeof(functor_type)),
 				functor_deleter<functor_type>);
-				store_size_ = sizeof(functor_type);
+				m_store_size = sizeof(functor_type);
 			}
 			else
 			{
-				deleter_(store_.get());
+				m_deleter(m_store.get());
 			}
 
-			new (store_.get()) functor_type(forward<T>(f));
+			new (m_store.get()) functor_type(forward<T>(f));
 
-			object_ptr_ = store_.get();
-			stub_ptr_ = functor_stub<functor_type>;
-			deleter_ = deleter_stub<functor_type>;
+			m_object_ptr = m_store.get();
+			m_stub_ptr = functor_stub<functor_type>;
+			m_deleter = deleter_stub<functor_type>;
 
 			return *this;
 		}
@@ -249,41 +236,41 @@ namespace OpenEFW
 			return const_member_pair<C>(&object, method_ptr);
 		}
 
-		void reset() { if (!stub_ptr_) return; stub_ptr_ = nullptr; store_.reset(); }
+		void reset() { if (!m_stub_ptr) return; m_stub_ptr = nullptr; m_store.reset(); }
 
-		void reset_stub() _NOEXCEPT{ stub_ptr_ = nullptr; }
+		void reset_stub() _NOEXCEPT{ m_stub_ptr = nullptr; }
 
 		void swap(Delegate& other) _NOEXCEPT{ swap(*this, other); }
 
 		bool operator==(Delegate const& rhs) const _NOEXCEPT{
-			return (object_ptr_ == rhs.object_ptr_) && (stub_ptr_ == rhs.stub_ptr_);
+			return (m_object_ptr == rhs.m_object_ptr) && (m_stub_ptr == rhs.m_stub_ptr);
 		}
 
 		bool operator!=(Delegate const& rhs) const _NOEXCEPT{ return !operator==(rhs); }
 
 		bool operator<(Delegate const& rhs) const _NOEXCEPT{
-			return (object_ptr_ < rhs.object_ptr_) ||
-			((object_ptr_ == rhs.object_ptr_) && (stub_ptr_ < rhs.stub_ptr_));
+			return (m_object_ptr < rhs.m_object_ptr) ||
+			((m_object_ptr == rhs.m_object_ptr) && (m_stub_ptr < rhs.m_stub_ptr));
 		}
 
-		bool operator==(nullptr_t const) const _NOEXCEPT { return stub_ptr_ == nullptr; }
-		bool operator!=(nullptr_t const) const _NOEXCEPT { return stub_ptr_ != nullptr; }
+		bool operator==(nullptr_t const) const _NOEXCEPT { return m_stub_ptr == nullptr; }
+		bool operator!=(nullptr_t const) const _NOEXCEPT { return m_stub_ptr != nullptr; }
 
-		explicit operator bool() const _NOEXCEPT { return stub_ptr_ ? true : false; }
+		explicit operator bool() const _NOEXCEPT { return m_stub_ptr ? true : false; }
 
 		R invoke(A... args) const {
-			//assert(stub_ptr_);
-			if (!stub_ptr_) throw Exception<This>("bad function call", __FILE__X, __LINE__);
-			return stub_ptr_(object_ptr_, forward<A>(args)...);
+			//assert(m_stub_ptr);
+			if (!m_stub_ptr) throw Exception<This>("bad function call", __FILE__X, __LINE__);
+			return m_stub_ptr(m_object_ptr, forward<A>(args)...);
 		};
 
 		R operator()(A... args) const {
-			//assert(stub_ptr_);
-			if (!stub_ptr_) throw Exception<This>("bad function call", __FILE__X, __LINE__);
-			return stub_ptr_(object_ptr_, forward<A>(args)...);
+			//assert(m_stub_ptr);
+			if (!m_stub_ptr) throw Exception<This>("bad function call", __FILE__X, __LINE__);
+			return m_stub_ptr(m_object_ptr, forward<A>(args)...);
 		};
 
-		stub_ptr_type target() const { return stub_ptr_; };
+		stub_ptr_type target() const { return m_stub_ptr; };
 
 		template<class C> func_ptr_type c_target(bool reset = false) { return callback<C>(this, reset); };
 
@@ -301,20 +288,20 @@ namespace OpenEFW
 		};
 
 	protected:
-		func_ptr_type func_ptr_ = nullptr;
+		func_ptr_type m_func_ptr = nullptr;
 
 	private:
 		friend struct hash<Delegate>;
 
 		using deleter_type = void(*)(void*);
 
-		void* object_ptr_ = nullptr;
-		stub_ptr_type stub_ptr_ = nullptr;
+		void* m_object_ptr = nullptr;
+		stub_ptr_type m_stub_ptr = nullptr;
 
-		deleter_type deleter_ = nullptr;
+		deleter_type m_deleter = nullptr;
 
-		shared_ptr<void> store_;
-		size_t store_size_ = 0;
+		shared_ptr<void> m_store;
+		size_t m_store_size = 0;
 
 		template <class T>
 		static void functor_deleter(void* const p)
@@ -415,8 +402,8 @@ namespace OpenEFW
 			return default;
 		};
 
-		static decltype(stub_ptr_) target(Super& ref) { return ref.target(); };
-		static decltype(func_ptr_) c_target(Super& ref) { return ref.c_target<This>(); };
+		static decltype(m_stub_ptr) target(Super& ref) { return ref.target(); };
+		static decltype(m_func_ptr) c_target(Super& ref) { return ref.c_target<This>(); };
 	};
 };
 
@@ -426,8 +413,8 @@ namespace std
 	struct hash<::OpenEFW::Delegate<R(A...)> >
 	{
 		size_t operator()(::OpenEFW::Delegate<R(A...)> const& d) const _NOEXCEPT {
-			auto const seed(hash<void*>()(d.object_ptr_));
-			return hash<typename ::OpenEFW::Delegate<R(A...)>::Type>()(d.stub_ptr_) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+			auto const seed(hash<void*>()(d.m_object_ptr));
+			return hash<typename ::OpenEFW::Delegate<R(A...)>::Type>()(d.m_stub_ptr) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 		}
 	};
 };

@@ -31,14 +31,10 @@
 #ifndef __OPENEFW_OBJECT_GENERATOR_HPP__
 #define __OPENEFW_OBJECT_GENERATOR_HPP__
 
-#include <utility>
-
-#include "delegate.hpp"
+#include "Delegate.hpp"
 
 namespace OpenEFW
 {
-	using ::std::declval;
-
 	template<typename C> class ObjectGenerator
 	{
 	public:

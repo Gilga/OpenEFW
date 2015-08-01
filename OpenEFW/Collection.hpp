@@ -31,19 +31,12 @@
 #ifndef __OPENEFW_COLLECTION_HPP__
 #define __OPENEFW_COLLECTION_HPP__
 
-#include <unordered_map>
-#include <map>
-#include <set>
+#include "type_lists.hpp"
 
 #include "exception.hpp"
-#include "macros/exception.hpp"
-
 #include "UnknownClass.hpp"
 
 namespace OpenEFW {
-
-	using ::std::map;
-	using ::std::set;
 
 	template<typename ...A> class Collection;
 
@@ -62,7 +55,7 @@ namespace OpenEFW {
 	};
 
 	template<typename K, typename T, typename H, typename M, typename S> class Collection<K, T, H, M, S> : public Collection<>{
-		OpenEFW_SetCurrentClass
+		SetUnknownClass
 
 	public:
 		using Key = K;
@@ -109,7 +102,7 @@ namespace OpenEFW {
 		Map map;
 
 		virtual void copy(Collection<>& other) {
-			auto ref = other.get<Collection<K, T, H, M, S>>();
+			auto ref = other.reconvert<Collection<K, T, H, M, S>>();
 			if (ref) map = ref->map;
 		}
 
@@ -118,7 +111,7 @@ namespace OpenEFW {
 
 	template<typename Key, typename T, typename Hasher, typename Map> class Collection<Key, T, Hasher, Map>
 		: public Collection<Key, T, Hasher, Map, set<Key, Hasher>> {
-			OpenEFW_SetCurrentClass
+		SetUnknownClass
 	public:
 		using This = Collection<Key, T, Hasher, Map>;
 		using Base = Collection<>;
@@ -128,7 +121,7 @@ namespace OpenEFW {
 
 	template<typename Key, typename T, typename Hasher> class Collection<Key, T, Hasher>
 		: public Collection<Key, T, Hasher, map<Key, T, Hasher>, set<Key, Hasher>>{
-			OpenEFW_SetCurrentClass
+		SetUnknownClass
 	public:
 		using This = Collection<Key, T, Hasher>;
 		using Base = Collection<>;
@@ -137,7 +130,7 @@ namespace OpenEFW {
 	};
 
 	template<typename Key, typename T> class Collection<Key, T> : public Collection<Key, T, Key>{
-		OpenEFW_SetCurrentClass
+		SetUnknownClass
 
 	public:
 		using This = Collection<Key, T>;

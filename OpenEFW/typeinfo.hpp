@@ -35,8 +35,6 @@
 
 namespace OpenEFW
 {
-	using ::std::type_info;
-
 	class TypeInfo {
 	protected:
 		size_t m_hash_code = 0;

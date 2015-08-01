@@ -31,10 +31,7 @@
 #ifndef __OPENEFW_EXTENDED_MAP_HPP__
 #define __OPENEFW_EXTENDED_MAP_HPP__
 
-#include <unordered_map>
-
-#include "delegate.hpp"
-#include "macros/exception.hpp"
+#include "Delegate.hpp"
 
 namespace OpenEFW
 {

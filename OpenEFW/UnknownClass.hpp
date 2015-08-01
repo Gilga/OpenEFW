@@ -31,21 +31,15 @@
 #ifndef __OPENEFW_UNKNOWNCLASS_HPP__
 #define __OPENEFW_UNKNOWNCLASS_HPP__
 
-#ifndef OpenEFW_SetCurrentClass
-#define OpenEFW_SetCurrentClass private: virtual void set() { _unknownClass<::std::remove_pointer<decltype(this)>::type>() = this; };
+#ifndef SetUnknownClass
+#define SetUnknownClass private: virtual void set() { _unknownClass<RemovePointer(this)>() = this; };
 #endif
 
 #include "typeinfo.hpp"
-
-#include <mutex>
+#include "type_thread.hpp"
 
 namespace OpenEFW
 {
-	template<typename T> using remove_pointer = ::std::remove_pointer<T>;
-	template<typename T> using remove_reference = ::std::remove_reference<T>;
-	using mutex = ::std::mutex;
-	using lock_guard_mutex = ::std::lock_guard<mutex>;
-
 	/*
 	 *	This class retuns a derivated class without casting
 	 */
@@ -74,7 +68,7 @@ namespace OpenEFW
 		virtual string str() { return "[ UnknownClass ]"; };
 	
 		// returns current object, thread secure
-		template<typename T> T* get(){
+		template<typename T> T* reconvert(){
 			lock_guard_mutex guard(_mutex());
 			set();
 			T*& uobj = _unknownClass<T>();
