@@ -33,16 +33,14 @@
 
 #include "Collection.hpp"
 #include "SmartMap.hpp"
+#include "Arguments.hpp"
 
 #include "type_ios.hpp"
 #include "type_traits.hpp"
 #include "type_functional.hpp"
 
-// Useful inside a anonym function like : [&](That* that){ ... }
-#ifndef CompAdd
-#define CompAdd(x,y) that->add<x>(#y)
-#define CompGet(x,y) that->get<x>(#y)
-#define CompCall(x,y) that->call<x>(#y)
+#ifndef CompArg
+#define CompArg(x,y) ::OpenEFW::Arguments<::OpenEFW::string, decltype(y)>{x,y};
 #endif
 
 namespace OpenEFW {
@@ -130,12 +128,6 @@ namespace OpenEFW {
 				static Function<T> func;
 				return func;
 			};
-		};
-
-		template<typename T> struct In {
-			Identifer id;
-			T value;
-			In(const Identifer &id, const T &value) : id(id), value(value) {};
 		};
 
 		#define CompNoExist(type) THROW_EXCEPTION(This, "'[" + *this + "] [" + id + "] " + type + "' does not exists");
@@ -283,37 +275,31 @@ namespace OpenEFW {
 			return (f)(this, forward<A>(args)...);
 		};
 
-		#define ComponentConstructor(x) \
-		This() { setId(#x); }; \
-		This(const This& other) { copy(const_cast<This&>(other)); }; \
-		explicit This(bool usepreset) { setId(#x); if (usepreset) preset(*this); }; \
+		template<typename T> This& operator+=(const Arguments<string, T>& in) { add<T>(in.a1) = in.a2; return *this; };
+		template<typename T> This& operator=(const Arguments<string, T>& in) { replace<T>(in.a1) = in.a2; return *this; };
+	
+		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; };
 
-		#define ComponentOperators \
-		template<typename T> This& operator=(const In<Function<T>> in){ replace<T>(in.id) = in.value; return *this; }; \
-		template<typename T> This& operator=(const In<T> in){ replace<T>(in.id) = in.value; return *this; }; \
-		This& operator+=(const In<This>& in){ replace<This>(in.id) = in.value; return *this; }; \
-		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; }; \
-		bool operator==(const This& other){ return m_id == other.m_id; }; \
-		bool operator==(const decltype(m_id)& other){ return m_id == other; }; \
-		bool operator==(const Identifer& other){ return m_id == hash<Identifer>()(other); }; \
-		bool operator!=(const This& other){ return !(*this == other); }; \
-		bool operator!=(const decltype(m_id)& other){ return !(*this == other); }; \
-		bool operator!=(const Identifer& other){ return !(*this == other); }; \
-		void operator()() { create(); }; \
-		friend string operator+(const char* other, This& o) { return other + o.str(); }; \
-		friend string operator+(string &other, This& o) { return other + o.str(); }; \
-		friend void operator+=(string &other, This& o) { other += o.str(); }; \
+		bool operator==(const This& other){ return m_id == other.m_id; };
+		bool operator==(const decltype(m_id)& other){ return m_id == other; };
+		bool operator==(const Identifer& other){ return m_id == hash<Identifer>()(other); };
+		bool operator!=(const This& other){ return !(*this == other); };
+		bool operator!=(const decltype(m_id)& other){ return !(*this == other); };
+		bool operator!=(const Identifer& other){ return !(*this == other); };
+
+		void operator()() { create(); };
+
+		friend string operator+(const char* other, This& o) { return other + o.str(); };
+		friend string operator+(string &other, This& o) { return other + o.str(); };
+		friend void operator+=(string &other, This& o) { other += o.str(); };
 		friend ostream& operator<<(ostream &other, This& o) { return other << "Component [" + o + "]"; };
 
 		#define NewComponent(x) \
 		SetUnknownClass\
 		public: using This = x; \
-		public: ComponentOperators\
-		public: ComponentConstructor(x)
-
-		// set operators and constructors
-
-		ComponentOperators
+		x() { setId(#x); }; \
+		x(const x& other) { copy(const_cast<x&>(other)); }; \
+		explicit x(bool usepreset) { setId(#x); if (usepreset) preset(*this); };
 
 		This() = default; \
 		This(const This& other) { copy(const_cast<This&>(other)); }; \
