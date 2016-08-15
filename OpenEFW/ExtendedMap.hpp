@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -35,20 +35,18 @@
 
 namespace OpenEFW
 {
-	template<typename ...> class ExtendedMap;
-
-	template<typename I, typename T, typename VType, typename VValue> class ExtendedMap<I, T, VType, VValue>
+	template<typename I, typename T, typename O, typename V, typename M = unordered_map<I, V>, typename P = pair<I, V>>
+	class ExtendedMap
 	{
 	public:
-		using This = ExtendedMap<I, T, VType, VValue>;
+		using This = ExtendedMap<I, T, O, V, M, P>;
 
-		using Id = I;
-		using Type = VType;
-		using Value = VValue;
-
+		using Id = I; // e.g. string
+		using Type = O; // e.g. int
+		using Value = V; // e.g. shared_ptr<int>
+		using Map = M;
+		using Pair = P;
 		using Function = Delegate<bool(Id, Type)>;
-		using Map = unordered_map<Id, Value>;
-		using Pair = pair<Id, Value>;
 
 	protected:
 		Map m_map;
@@ -80,10 +78,15 @@ namespace OpenEFW
 
 		template<typename Class = T, typename ...Args> bool create(Id id, Args... args)
 		{
-			
 			if (!is_convertible<Class*, Type>::value) THROW_EXCEPTION(This, "create(!is_convertible)");
 			if (!has(id)) { m_map.insert(Pair(id, createValue(id, new Class(forward<Args>(args)...)))); return true; }
 			return false;
+		};
+		
+		virtual bool add(Id id)
+		{
+			if (!has(id)) { m_map.insert(Pair(id, createValue(id))); return true; }
+			return false; // failed, because it already exists
 		};
 
 		virtual bool add(Id id, const Type& obj)
@@ -152,6 +155,7 @@ namespace OpenEFW
 			return false;
 		};
 
+		// e.g : list.loop([&](const Id& id, const Type &obj) { printf("%s\n", k.c_str()); return false; });
 		virtual bool loop(Function f)
 		{
 			for (auto & e : m_map) if (f(e.first, getContent(e.second))) return true; // break loop

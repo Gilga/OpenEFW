@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -35,9 +35,12 @@
 
 namespace OpenEFW
 {
-	template<typename I, typename T> class SmartMap : public ExtendedMap<I, T, T*, shared_ptr<T>>{
+	template<typename I, typename T, typename C = I, typename V = shared_ptr<T>,
+		typename Super = ExtendedMap<I, T, T*, V, typename conditional<is_fundamental<I>::value || is_same<I, string>::value, unordered_map<I, V>, unordered_map<I, V, C>>::type > >
+
+	class SmartMap : public Super
+	{
 		using This = SmartMap<I,T>;
-		using Super = ExtendedMap<I, T, T*, shared_ptr<T>>;
 
 	public:
 		using typename Super::Id;
@@ -51,6 +54,11 @@ namespace OpenEFW
 		virtual void clear(){ 
 			for (auto &e : m_map) { remover(e.first, e.second.get()); }
 			__super::clear();
+		};
+		
+		virtual bool add(Id id)
+		{
+			return __super::add(id);
 		};
 
 		virtual bool add(Id id, const Type& obj)

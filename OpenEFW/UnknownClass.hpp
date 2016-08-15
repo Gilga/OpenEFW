@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@
 #define SetUnknownClass private: virtual void set() { _unknownClass<RemovePointer(this)>() = this; };
 #endif
 
-#include "typeinfo.hpp"
+#include "exception.hpp"
 #include "type_thread.hpp"
 
 namespace OpenEFW
@@ -44,23 +44,39 @@ namespace OpenEFW
 	 *	This class retuns a derivated class without casting
 	 */
 	class UnknownClass {
+
+		UnknownClass(UnknownClass const&) = delete;
+		UnknownClass& operator=(UnknownClass const&) = delete;
+
 	private:
 
 		// for thread safety
 		static mutex& _mutex(){ static mutex m; return m; };
 
 	protected:
+		UnknownClass() {}
+
 		TypeInfo m_typeinfo;
 
 		// saves and returns the current object
 		template<typename T> static T*& _unknownClass(){
-			static T* object = nullptr;
-			return object;
+			static T* obj = nullptr;
+			return obj;
 		};
 
 		// sets the current object
 		virtual void set() = 0;
 		virtual void Destructor() {};	// Destructor
+		//virtual void Constructor() {};	// Constructor
+		
+		template<class T, typename = enable_if_t<is_base_of<UnknownClass, T>::value> >
+		void updateTypeInfo(T* t)
+		{
+			if((UnknownClass*)t != this)
+				THROW_EXCEPTION(T, ": is not derivative of this object (UnknownClass)");
+			
+			m_typeinfo.set<RemovePointer(t)>();
+		}
 
 	public:
 		virtual TypeInfo getTypeInfo() { return m_typeinfo; };
@@ -72,12 +88,12 @@ namespace OpenEFW
 			lock_guard_mutex guard(_mutex());
 			set();
 			T*& uobj = _unknownClass<T>();
-			T* obj = uobj; uobj = nullptr;
+			T* obj = uobj;
+			uobj = nullptr;
 			return obj;
 		};
 
 		virtual ~UnknownClass() { Destructor(); }; // Destructor
-		virtual void Constructor() {};	// Constructor
 	};
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -32,9 +32,7 @@
 #define __OPENEFW_EXCEPTION_HPP__
 
 #include "macros/exception.hpp"
-
 #include "type_exception.hpp"
-
 #include "typeinfo.hpp"
 
 namespace OpenEFW

@@ -28,43 +28,54 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_TYPE_TRAITS_HPP__
-#define __OPENEFW_TYPE_TRAITS_HPP__
+#ifndef __OPENEFW_CONTAINER_HPP__
+#define __OPENEFW_CONTAINER_HPP__
 
-#include <type_traits>
+#include "UnknownClass.hpp"
 
-namespace OpenEFW
-{
-	using ::std::true_type;
-	using ::std::false_type;
-	using ::std::is_constructible;
-	using ::std::is_convertible;
-	using ::std::is_trivial;
-	using ::std::is_abstract;
-	using ::std::is_base_of;
-	using ::std::is_class;
-	using ::std::is_same;
-	using ::std::is_fundamental;
-	using ::std::decay;
-	using ::std::enable_if;
-	using ::std::enable_if_t;
-	using ::std::conditional;
+namespace OpenEFW {
 
-	/*
-	template<typename T> struct has_constructor
-	{
-	// constructor
-	template <typename A> static true_type test(decltype(declval<A>().Constructor())*) { return true_type(); }
+	template<typename ...A> class Container;
 
-	// no constructor
-	template<typename A> static false_type test(...) { return false_type(); }
+	template<> class Container<> : public UnknownClass {
 
-	// This will be either `std::true_type` or `std::false_type`
-	typedef decltype(test<T>(0)) type;
+		Container(Container const&) = delete;
+		Container& operator=(Container const&) = delete;
 
-	static const bool value = type::value; // result
+	protected:
+		Container() {}
+
+	public:
+		using This = Container<>;
+
+		template<typename T> Container<T>* cast(){
+			using C = Container<T>;
+			if (m_typeinfo.hash_code() != TypeInfo::Get<C>::hash_code()) return nullptr;
+			return static_cast<C*>(this);
+		}
 	};
-	*/
+
+	template<typename T> class Container<T> : public Container<>{
+		SetUnknownClass
+		
+	private:
+		void default() { updateTypeInfo(this); };
+
+	public:
+		using Type = T;
+		using This = Container<T>;
+		using Super = Container<>;
+
+		template<typename ...Args>
+		Container(Args... args) : value(Type(forward<Args>(args)...)) { default(); }
+		
+		Type value;
+
+		This& operator=(This &other) = delete;
+		This& operator=(const Type &other) { value = other; return *this; }
+		Type* operator->() { return &value; }
+		Type& operator*() { return value; }
+	};
 };
 
 #endif

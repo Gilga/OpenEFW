@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -42,20 +42,6 @@ namespace OpenEFW
 
 		struct null_delete { void operator()(void const *) const {} };
 
-		template<typename T> struct has_constructor
-		{
-			/* constructor */
-			template <typename A> static true_type test(decltype(declval<A>().Constructor())*) { return true_type(); }
-
-			// no constructor
-			template<typename A> static false_type test(...) { return false_type(); }
-
-			// This will be either `std::true_type` or `std::false_type`
-			typedef decltype(test<T>(0)) type;
-
-			static const bool value = type::value; // result
-		};
-
 		// replace creation function of object
 		template<typename ...A> static Delegate<shared_ptr(A...)>& delegate(){
 			static Delegate<shared_ptr(A...)> d = default_new<C, A...>(); 
@@ -78,15 +64,13 @@ namespace OpenEFW
 	protected:
 		static shared_ptr& pointer() { static shared_ptr c; return c; }
 
-		template<typename C, typename ...A> static enable_if_t<has_constructor<C>::value, Delegate<shared_ptr(A...)>> default_new() {
+		template<typename C, typename ...A> static enable_if_t<is_constructible<C,A...>::value, Delegate<shared_ptr(A...)>> default_new() {
 			return [](A... args){
-				C* c = new C(forward<A>(args)...);
-				c->Constructor();
-				return shared_ptr(c);
+				return shared_ptr(new C(forward<A>(args)...));
 			};
 		};
 
-		template<typename C, typename ...A> static enable_if_t<!has_constructor<C>::value, Delegate<shared_ptr(A...)>> default_new() {
+		template<typename C, typename ...A> static enable_if_t<!is_constructible<C, A...>::value, Delegate<shared_ptr(A...)>> default_new() {
 			return nullptr;
 		};
 	};

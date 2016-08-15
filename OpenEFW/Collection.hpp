@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -68,7 +68,7 @@ namespace OpenEFW {
 		using Super = Collection<>;
 		using Index = size_t;
 
-		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		Collection() { updateTypeInfo(this);  }
 
 		size_t size() { return map.size(); };
 
@@ -78,17 +78,22 @@ namespace OpenEFW {
 
 		Type& first(){
 			if (!size()) THROW_EXCEPTION(This, ": has no entry '" + m_typeinfo.type_name() + "'");
+			
 			return map.begin()->second;
 		}
 
 		Type& getByIndex(Index id){
-			if (id >= size()) THROW_EXCEPTION(This, "invalid index " + to_string(id) + " for entries '" + m_typeinfo.type_name() + "'");
-			Index index = 0; for (auto& e : map) { if (index == id) { return e.second; }; ++index; }
-			OpenEFW_EXCEPTION(This, "weird error for entries '" + m_typeinfo.type_name() + "'");
+			if (id >= size()) THROW_EXCEPTION(This, ": invalid index " + to_string(id) + " for entries '" + m_typeinfo.type_name() + "'");
+			
+			Index index = 0;
+			for (auto& e : map) { if (index == id) { return e.second; }; ++index; }
+			
+			THROW_EXCEPTION(This, ": weird error for entries '" + m_typeinfo.type_name() + "'");
 		}
 
 		Type& get(Key id, bool ignore = false){
 			if (!ignore && !has(id)) THROW_EXCEPTION(This, "could not find entry " + Hasher::toStr(id) + " in " + m_typeinfo.type_name());
+			
 			return map[id];
 		}
 
@@ -115,7 +120,7 @@ namespace OpenEFW {
 	public:
 		using This = Collection<Key, T, Hasher, Map>;
 		using Base = Collection<>;
-		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		Collection() { updateTypeInfo(this);  }
 		virtual Base* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 
@@ -125,7 +130,7 @@ namespace OpenEFW {
 	public:
 		using This = Collection<Key, T, Hasher>;
 		using Base = Collection<>;
-		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		Collection() { updateTypeInfo(this);  }
 		virtual Base* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 
@@ -135,7 +140,7 @@ namespace OpenEFW {
 	public:
 		using This = Collection<Key, T>;
 		using Base = Collection<>;
-		Collection() { m_typeinfo.set<remove_pointer<decltype(this)>::type>(); }
+		Collection() { updateTypeInfo(this); }
 		virtual Base* copy() { This *c = new This(); c->list = list; c->map = map; return c; };
 	};
 };
