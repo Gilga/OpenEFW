@@ -28,51 +28,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_TYPE_INFO_HPP__
-#define __OPENEFW_TYPE_INFO_HPP__
+#ifndef DEFAULT_EXCEPTIONS
+#define DEFAULT_EXCEPTIONS
 
-#include "stringReplace.hpp"
+#include "exception.hpp"
 
-namespace OpenEFW
-{
-	class TypeInfo {
-	protected:
-		size_t m_hash_code = 0;
-		string m_type_name = "?";
-
-	public:
-		template<typename T> inline void set() {
-			m_type_name = Get<T>::to_str();
-			m_hash_code = Get<T>::hash_code();
-		};
-
-		template<typename T> bool hasType() const { return m_hash_code == TypeInfo::Get<T>::hash_code(); };
-
-		virtual size_t hash_code() { return m_hash_code; };
-		virtual string type_name() { return m_type_name; };
-
-		template<typename T> struct Get
-		{
-			static const type_info& type_info() { return typeid(T); }
-			static inline size_t hash_code() { static size_t hash_code = type_info().hash_code(); return hash_code; }
-			static inline const char* c_str() { static const char* name = type_info().name(); return name; }
-			static inline string to_str() { static string name = clean(c_str()); return name; }
-
-			static inline string clean(string target) {
-		
-				String::replaceAll(target, typeid(string).name(), "std::string");
-				String::replaceAll(target, "__cdecl", "");
-				String::replaceAll(target, "class ", "");
-				String::replaceAll(target, "struct ", "");
-				String::replaceAll(target, " >", ">");
-				String::replaceAll(target, "< ", "<");
-
-				return target;
-			};
-		};
-	};
-
-	template<> const char* TypeInfo::Get<string>::c_str() { static const char* name = "std::string"; return name; }
-};
+#define ThrowNotExist(x) THROW_EXCEPTION(This, x + " does not exists.");
+#define ThrowIsNull(x) THROW_EXCEPTION(This, x + " is NULL.");
+#define ThrowNotCreate(x) THROW_EXCEPTION(This, x + " could not be created.");
+#define ThrowNotAdd(x) THROW_EXCEPTION(This, x + " could not be added. Entry already exists. Use replace command instead.");
+#define ThrowNotCast(x) THROW_EXCEPTION(This, x + " could not be casted.");
+#define ThrowNotRpl(x) THROW_EXCEPTION(This, x + " could not be replaced.");
 
 #endif

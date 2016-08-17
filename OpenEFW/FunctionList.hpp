@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -67,7 +67,7 @@ namespace OpenEFW
 		};
 
 	protected:
-		template<typename T> inline string getFuncName(const string& name) { return name + " " + TypeInfo::Get<T>::str(); };
+		template<typename T> inline string getFuncName(const string& name) { return name + " " + TypeInfo::Get<T>::to_str(); };
 
 		Map map;
 	};

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2016, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ namespace OpenEFW
 		{
 		protected:
 			template<typename T> static inline string type() {
-				static auto str = TypeInfo::Get<I>::str() + "::" + TypeInfo::Get<T>::str();
+				static auto str = TypeInfo::Get<I>::to_str() + "::" + TypeInfo::Get<T>::to_str();
 				return str;
 			};
 

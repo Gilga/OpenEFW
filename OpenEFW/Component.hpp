@@ -39,6 +39,8 @@
 #include "type_traits.hpp"
 #include "type_functional.hpp"
 
+#include "macros/default_exceptions.hpp"
+
 #ifndef CompArg
 #define CompArg(x,y) ::OpenEFW::Arguments<::OpenEFW::string, decltype(y)>{x,y};
 #endif
@@ -63,7 +65,7 @@ namespace OpenEFW
 		public:
 
 			template<typename T>
-			static Key create(Identifer id) { return Key(id + "_" + TypeInfo::Get<T>::str()); }
+			static Key create(Identifer id) { return Key(id + "_" + TypeInfo::Get<T>::to_str()); }
 
 			Key() = default;
 			Key(Identifer c) : id(hash<decltype(c)>()(c)), content(c) {};
@@ -83,6 +85,7 @@ namespace OpenEFW
 		};
 
 		size_t m_id = 0;
+		Identifer m_type;
 		Identifer m_name;
 
 		bool m_created = false;
@@ -95,25 +98,18 @@ namespace OpenEFW
 	public:
 		template<typename T> using Function = typename ComponentFunction<T>::Type;
 		template<typename T> using Value = Container<T>;
-		
-		using Lists = SmartMap<Key, Container<>, Key>;
+		using BaseValue = Container<>;
+
+		using Lists = SmartMap<Key, BaseValue, Key>;
 
 	protected:
 		Lists m_values;
 		Lists m_functions;
 		Lists m_components;
 		
-		#define CompFuncNoExist(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " + type + "' static function does not exists.");
-		#define CompFuncNoAdd(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " + type + "' static function could not be added.");
-
-		#define CompNoExist(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " + TypeInfo::Get<type>::str() + "' does not exists.");
-		#define CompNull(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " + TypeInfo::Get<type>::str() + "' is NULL.");
-		#define CompNoCreate(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " + TypeInfo::Get<type>::str() + "' could not be created.");
-		#define CompNoAdd(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " + TypeInfo::Get<type>::str() + "' could not be added. Entry already exists. Use replace command instead.");
-		#define CompNoCast(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " +  TypeInfo::Get<type>::str() + "' could not be casted.");
-		#define CompNoRpl(type) THROW_EXCEPTION(This, "'[" + m_name + "_" + id + "] " +  TypeInfo::Get<type>::str() + "' could not be replaced.");
-
-		#define CreateKey() Key::create<T>(id)
+		#define CompID(x)  "[" + to_str() + "::" + x + "] "
+		#define CompType CompID(id) + TypeInfo::Get<Value<T>>::to_str()
+		#define CompFunc CompID("@static") + type_to_str<C,I,T>()
 
 		template<typename T> T& replace(Lists &lists, Identifer id, Identifer old_id) {
 			auto &value = get<T>(lists, id);
@@ -123,45 +119,46 @@ namespace OpenEFW
 		}
 
 		template<typename T, typename ...Args> T& add(Lists &lists, Identifer id, Args... args) {
-			//std::cout << "Add: " << CreateKey().to_str() << "\n";
-			if (!lists.add(CreateKey(), new Value<T>(forward<Args>(args)...))) CompNoAdd(Value<T>);
+			if (!lists.add(Key::create<T>(id), new Value<T>(forward<Args>(args)...))) ThrowNotAdd(CompType);
 			return get<T>(lists, id);
 		}
 
 		template<typename T> bool del(Lists &lists, Identifer id) {
-			if (!has<T>(lists, key)) CompNoExist(Value<T>);
-			return lists.del(CreateKey());
+			if (!has<T>(lists, key)) ThrowNotExist(CompType);
+			return lists.del(Key::create<T>(id));
 		}
 
 		template<typename T> T& get(Lists &lists, Identifer id) {
-			//std::cout << "Get: " << CreateKey().to_str() << "\n";
-			using Type = Value<T>;
-			if (!has<T>(lists, id)) CompNoExist(Type);
-			auto base = lists.get(CreateKey());
-			if (!base) CompNull(Type);
-			auto container = base ? base->cast<T>() : nullptr; //base->reconvert<Type>()
-			if (!container) CompNoCast(Type);
-			return **container;
+			if (!has<T>(lists, id)) ThrowNotExist(CompType);
+			auto base = lists.get(Key::create<T>(id));
+			return **reconvertValue<T>(id, base);
 		};
 
 		template<typename T> bool has(Lists &lists, Identifer id) {
-			return lists.has(CreateKey());
+			return lists.has(Key::create<T>(id));
 		};
+
+		template<typename T> Value<T>* reconvertValue(Identifer id, BaseValue* base) {
+			if (!base) ThrowIsNull(CompType);
+			auto value = base ? base->reconvert<Value<T>>() : nullptr; //base->cast<T>()
+			if (!value) ThrowNotCast(CompType);
+			return value;
+		}
 
 		template<typename T> using BUILD = is_constructible<T>;
 		template<typename T> using CAST = is_convertible<Delegate<>, Function<T>>;
 		template<typename T> using SAME = is_same<This, typename decay<T>::type>;
 
-		template<typename I> struct Static
-		{
-			template<typename T> static inline string geType() {
-				static auto str = TypeInfo::Get<I>::str() + "::" + TypeInfo::Get<T>::str(); return str;
-			};
+		template<typename C, typename I, typename T>
+		static inline string type_to_str() {
+			static auto str = TypeInfo::Get<C>::to_str() + "::" + TypeInfo::Get<I>::to_str() + "::" + TypeInfo::Get<T>::to_str();
+			return str;
+		};
 
-			template<typename I, typename T> static inline Function<T>& function() {
-				static Function<T> func;
-				return func;
-			};
+		template<typename C, typename I, typename T>
+		static inline Function<T>& static_function() {
+			static Function<T> func;
+			return func;
 		};
 
 	public:
@@ -188,12 +185,15 @@ namespace OpenEFW
 		}
 
 		Identifer name() { return m_name; };
+		Identifer type() { return m_type; };
+
+		Identifer to_str() { return m_type + "::" + m_name; }
+		const char* c_str() { static string s; s = to_str(); return s.c_str(); }
+
 		size_t id() { return m_id; };
 
-		void setID(Identifer id) {
-			m_name = id;
-			m_id = hash<Identifer>()(id);
-		};
+		void setID(Identifer id) { m_type = id; m_id = hash<Identifer>()(id); };
+		void setName(Identifer name) { m_name = name; }
 
 		This& parent() { return *m_parent; };
 
@@ -249,8 +249,9 @@ namespace OpenEFW
 		template<typename T> CompTComp(bool) has(Identifer id) { return has<T>(m_components, id); }
 
 		template<typename R = void, typename ...A> R call(Identifer id, A... args){
-			if (!has<R(A...)>(id)) CompNoExist(R(A...));
-			return get<R(A...)>(id)(this, forward<A>(args)...);
+			using T = R(A...);
+			if (!has<T>(id)) ThrowNotExist(CompType);
+			return get<T>(id)(this, forward<A>(args)...);
 		};
 
 		template<typename T> void invoke(Identifer id)
@@ -262,29 +263,28 @@ namespace OpenEFW
 		}
 
 		template<typename C, typename I, typename T> CompStaticTFunc(Function<T>&) get() {
-			using Func = Static<C>;
-			static Identifer id = "@static";
-			auto& current = Func::function<I, T>();
-			if (!current) CompFuncNoExist(Func::geType<T>());
+			auto& current = static_function<C, I, T>();
+			if (!current) ThrowNotExist(CompFunc);
 			return current;
 		};
 
 		template<typename C, typename I, typename T> CompStaticTFunc(Function<T>&) add() {
-			using Func = Static<C>;
-			static Identifer id = "@static";
-			auto& current = Func::function<I, T>();
-			if (current) CompFuncNoAdd(Func::geType<T>());
+			auto& current = static_function<C, I, T>();
+			if (current) ThrowNotAdd(CompFunc);
 			return current;
 		};
 
-		template<typename C, typename I, typename T> CompStaticTFunc(void) add(Function<T> f) { add<C, I, T>() = f; };
+		template<typename C, typename I, typename T> CompStaticTFunc(bool) add(Function<T> f) {
+			auto& current = static_function<C, I, T>();
+			bool result = !current;
+			if(result) add<C, I, T>() = f;
+			return result;
+		};
 
 		template<typename C, typename I, typename J = void, typename T> CompStaticTFuncRpl(Function<T>&) replace() {
-			using Func = Static<C>;
-			static Identifer id = "@static";
-			auto& func = Func::function<I, T>();
-			if (!func) CompFuncNoExist(Static<I>::geType<T>());
-			auto& oldfunc = Func::function<J, T>();
+			auto& func = static_function<C, I, T>();
+			if (!func) ThrowNotExist(CompFunc);
+			auto& oldfunc = static_function<C, J, T>();
 			oldfunc = func;
 			return func;
 		};
@@ -292,10 +292,9 @@ namespace OpenEFW
 		template<typename C, typename I, typename J = void, typename T> CompStaticTFuncRpl(void) replace(Function<T> f) { replace<C, I, J, T>() = f; };
 
 		template<typename C, typename I, typename R = void, typename ...A> CompStaticTCall(R) call(A... args) {
-			using Func = Static<C>;
-			static Identifer id = "@static";
-			auto f = Func::function<I, R(A...)>();
-			if (!f) CompFuncNoExist(Func::geType<R(A...)>());
+			using T = R(A...);
+			auto f = static_function<C, I, T>();
+			if (!f) ThrowNotExist(CompFunc);
 			return (f)(this, forward<A>(args)...);
 		};
 
@@ -333,14 +332,12 @@ namespace OpenEFW
 
 		~Component() { if (m_created && has<void()>("@delete")) call("@delete"); };
 
-		string str() { return to_string(m_id); }
-		const char* c_str() { static string s; s = str(); return s.c_str(); }
-
 	protected:
 
 		void copy(Lists& that, Lists& other)
 		{
 			that.clear();
+			//other.loop([&](const Lists::Id& id, const Lists::Type &obj) { that.add(id, reconvertValue<T>(obj)); return false; });
 			for (auto &e : other.source()) that.add(e.first, e.second.get());
 		}
 
@@ -378,6 +375,7 @@ namespace OpenEFW
 
 		void copy(This& other){
 			m_id = other.m_id;
+			m_type = other.m_type;
 			m_name = other.m_name;
 			if (!m_created) m_created = other.m_created;
 			if (!m_parent) m_parent = other.m_parent;

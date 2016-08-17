@@ -67,7 +67,7 @@ namespace OpenEFW
 
 	protected:
 
-		string type = TypeInfo::Get<T>::str();
+		string type = TypeInfo::Get<T>::to_str();
 		string msg;
 		string line;
 	};
