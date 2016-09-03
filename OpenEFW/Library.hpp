@@ -52,6 +52,8 @@ namespace OpenEFW
 		Library(){ m_typeinfo.set<T>(); };
 		virtual ~Library(){};
 
+		void setName(string const& name) { Super::add<string>(name); }; // set name of library
+		void setVersion(Versions::List list) { versions.set(list); }; // set versions of library
 		bool hasVersion(size_t version) { return versions.has(version); }; // check cetain version of library
 		void useVersion(size_t version) { versions.use() = version; }; // check version of library
 

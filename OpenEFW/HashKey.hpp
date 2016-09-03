@@ -28,53 +28,41 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #pragma once
-#ifndef __OPENEFW_OBJECT_GENERATOR_HPP__
-#define __OPENEFW_OBJECT_GENERATOR_HPP__
+#ifndef __OPENEFW_HASHKEY_HPP__
+#define __OPENEFW_HASHKEY_HPP__
 
-#include "Delegate.hpp"
+#include "type_string.hpp"
+#include "type_functional.hpp"
 
 namespace OpenEFW
 {
-	template<typename C> class ObjectGenerator
+	struct HashKey : public binary_function<HashKey, HashKey, bool>
 	{
+	private:
+		using This = HashKey;
+		size_t id;
+		string content;
+
 	public:
-		using Pointer = shared_ptr<C>;
 
-		struct null_delete { void operator()(void const *) const {} };
+		template<typename T>
+		static This create(string const& id) { return This(id + "_" + TypeInfo::Get<T>::to_str()); }
 
-		// replace creation function of object
-		template<typename ...A> static Delegate<Pointer(A...)>& delegate() {
-			static Delegate<Pointer(A...)> d = default_new<C, A...>();
-			return d;
-		};
+		This() = default;
+		This(string const& c) : id(hash<string>()(c)), content(c) {};
 
-		static void reset() { pointer().reset(); }
+		size_t to_hash() const { return id; };
+		string to_str() const { return content; };
 
-		template<typename ...A> static Pointer singleton(A... args) _NOEXCEPT {
-			if (!pointer()) pointer() = delegate()(forward<A>(args)...);
-			return Pointer(pointer().get(), null_delete{});
-		};
+		void copy(const This &other) { id = other.id; content = other.content; };
 
-		template<typename ...A> static Pointer instance(A... args) _NOEXCEPT {
-			Pointer ptr;
-			pointer() ? ptr.reset(pointer().get(), null_delete{}) : ptr = delegate()(forward<A>(args)...);
-			return ptr;
-		};
+		static bool compare(const This& left, const This& right) { return left == right; };
 
-		template<typename A> static Pointer create() { delegate() = [] { return ObjectGenerator<A>::singleton(); }; return delegate()(); };
-
-	protected:
-		static Pointer& pointer() { static Pointer c; return c; }
-
-		template<typename C, typename ...A> static enable_if_t<is_constructible<C,A...>::value, Delegate<Pointer(A...)>> default_new() {
-			return [](A... args){
-				return Pointer(new C(forward<A>(args)...));
-			};
-		};
-
-		template<typename C, typename ...A> static enable_if_t<!is_constructible<C, A...>::value, Delegate<Pointer(A...)>> default_new() {
-			return nullptr;
-		};
+		This& operator=(const This &other) { copy(other); return *this; };
+		bool operator==(const This &other) const { return (to_hash() == other.to_hash()); };
+		bool operator<(const This &other) const { return (to_hash() < other.to_hash()); };
+		bool operator()(const This& lhs, const This& rhs) const { return lhs == rhs; };
+		size_t operator()(const This& k) const { return to_hash(); };
 	};
 };
 
