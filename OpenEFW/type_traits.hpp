@@ -33,14 +33,21 @@
 
 #include <type_traits>
 
+// __cplusplus <= 201402L
+
 namespace OpenEFW
 {
 	using ::std::true_type;
 	using ::std::false_type;
+	using ::std::is_array;
 	using ::std::is_constructible;
 	using ::std::is_convertible;
 	using ::std::is_trivial;
 	using ::std::is_abstract;
+	using ::std::is_function;
+	//using ::std::is_callable; // C++17
+	using ::std::is_member_function_pointer;
+	using ::std::is_pointer;
 	using ::std::is_base_of;
 	using ::std::is_class;
 	using ::std::is_same;
@@ -49,6 +56,7 @@ namespace OpenEFW
 	using ::std::enable_if;
 	using ::std::enable_if_t;
 	using ::std::conditional;
+
 
 	/*
 	template<typename T> struct has_constructor

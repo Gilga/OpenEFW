@@ -51,6 +51,12 @@ namespace OpenEFW
 {
 	template <typename ...T> class Delegate;
 
+	template <typename T> struct Delegate<T> : public Delegate<decltype(&T::operator())> {};
+	template <typename C, typename R, typename... A> struct Delegate<R(C::*)(A...) const> : public Delegate<R(A...)> {
+		using ClassType = C;
+		using FunctionType = R(C::*)(A...) const;
+	};
+
 	template<> class Delegate<> {
 	protected:
 		using This = Delegate<>;
@@ -75,8 +81,6 @@ namespace OpenEFW
 	class Delegate<R(A...)> : public Delegate<>
 	{
 	protected:
-		using This = Delegate<R(A...)>;
-		using Super = Delegate<>;
 		using stub_ptr_type = R(*)(void*, A...);
 		using func_ptr_type = R(*)(A...);
 
@@ -87,6 +91,11 @@ namespace OpenEFW
 		m_object_ptr(o), m_stub_ptr(m) { default(); }
 
 	public:
+		using ReturnType = R;
+		using Type = R(A...);
+		using This = Delegate<Type>;
+		using Super = Delegate<>;
+
 		Delegate() { default(); } // = default;
 
 		Delegate(Delegate const&) = default;

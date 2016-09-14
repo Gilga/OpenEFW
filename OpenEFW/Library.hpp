@@ -64,10 +64,10 @@ namespace OpenEFW
 			return has;
 		}
 
-		template<typename I, typename T> CompStaticTFunc(Function<T>&) get() { return Super::get<This, I, T>(); };
-		template<typename I, typename T> CompStaticTFunc(Function<T>&) add() { return Super::add<This, I, T>(); };
-		template<typename I, typename J = void, typename T> CompStaticTFuncRpl(Function<T>&) replace() { return Super::replace<This, I, J, T>(); };
-		template<typename I, typename R = void, typename ...A> CompStaticTCall(R) call(A... args) { return Super::call<This, I, R, A...>(forward<A>(args)...); };
+		template<typename I, typename T> Delegate<T>& get() { return Super::get<Tags<This, I>, T>(); };
+		template<typename I, typename T> Delegate<T>& add() { return Super::add<Tags<This, I>, T>(); };
+		template<typename I, typename J = void, typename T> Delegate<T>& replace() { return Super::replace<Tags<This, I>, Tags<This, J>, T>(); };
+		template<typename I, typename R = void, typename ...A> R call(A... args) { return Super::call<Tags<This, I>, R, A...>(forward<A>(args)...); };
 	};
 };
 

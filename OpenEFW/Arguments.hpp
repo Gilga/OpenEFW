@@ -35,6 +35,10 @@
 #define ARGS2(x,y) ::OpenEFW::Arguments<decltype(x), decltype(y)>{x,y};
 #endif
 
+#ifndef SARGS2
+#define SARGS2(x,y) ::OpenEFW::Arguments<::OpenEFW::string, decltype(y)>{x,y};
+#endif
+
 namespace OpenEFW
 {
 	template<typename ...> struct Arguments;

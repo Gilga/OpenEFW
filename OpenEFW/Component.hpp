@@ -37,12 +37,7 @@
 #include "HashKey.hpp"
 
 #include "type_ios.hpp"
-
 #include "macros/default_exceptions.hpp"
-
-#ifndef CompArg
-#define CompArg(x,y) ::OpenEFW::Arguments<::OpenEFW::string, decltype(y)>{x,y};
-#endif
 
 namespace OpenEFW
 {
@@ -82,7 +77,7 @@ namespace OpenEFW
 		
 		#define CompID(x)  "[" + to_str() + "::" + x + "] "
 		#define CompType CompID(id) + TypeInfo::Get<Value<T>>::to_str()
-		#define CompFunc CompID("@static") + type_to_str<C,I,T>()
+		#define CompFunc CompID("@static") + type_to_str<I,T>()
 
 		template<typename T>
 		T& replace(Lists &lists, ParamID id, ParamID old_id)
@@ -128,22 +123,17 @@ namespace OpenEFW
 			return value;
 		}
 
-		template<typename T, typename ...Args> using BUILD = is_constructible<T,Args...>;
-		template<typename T> using CAST = is_convertible<Delegate<>, Function<T>>;
-		template<typename T> using SAME = is_same<This, typename decay<T>::type>;
-
-		template<typename C, typename I, typename T>
+		template<typename I, typename T>
 		static inline string type_to_str()
 		{
-			static auto str = TypeInfo::Get<C>::to_str() + "::"
-				+ TypeInfo::Get<I>::to_str() + "::"
+			static auto str = TypeInfo::Get<I>::to_str() + "::"
 				+ TypeInfo::Get<T>::to_str();
 			return str;
 		};
 
-		template<typename C, typename I, typename T>
-		static inline Function<T>& static_function()
-		{ static Function<T> func; return func;	};
+		template<typename I, typename T>
+		static inline Delegate<T>& static_function()
+		{ static Delegate<T> func; return func;	};
 
 	public:
 
@@ -183,65 +173,69 @@ namespace OpenEFW
 		Lists& functions() { return m_functions; };
 		Lists& components() { return m_components; };
 
-		#define CompTValC(x) enable_if_t<BUILD<T,Args...>::value && !SAME<T>::value, x>
-		#define CompTVal(x) enable_if_t<BUILD<T>::value && !SAME<T>::value, x>
-		#define CompTFunc(x) enable_if_t<CAST<T>::value, x>
-		#define CompTComp(x) enable_if_t<SAME<T>::value, x>
-
-		#define CompStaticTFunc(x) enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value, x>
-		#define CompStaticTFuncRpl(x) enable_if_t<is_class<I>::value && is_trivial<I>::value && CAST<T>::value && !is_same<I, J>::value, x>
-		#define CompStaticTCall(x) enable_if_t<is_class<I>::value && is_trivial<I>::value, x>
-
 		template<typename T>
-		CompTVal(T&) replace(ParamID id, ParamID old_id)
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
+		replace(ParamID id, ParamID old_id)
 		{ return replace<T>(m_values, id, old_id); }
 
 		template<typename T>
-		CompTVal(T&) replace(ParamID id)
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
+		replace(ParamID id)
 		{ return replace<T>(m_values, id, id); }
 
 		template<typename T, typename ...Args>
-		CompTValC(T&) add(ParamID id, Args... args)
+		enable_if_t<is_constructible<T, Args...>::value && !is_same<This, typename decay<T>::type>::value, T&>
+		add(ParamID id, Args... args)
 		{ return add<T>(m_values, id, forward<Args>(args)...); }
 
 		template<typename T>
-		CompTVal(T&) get(ParamID id)
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
+		get(ParamID id)
 		{ return get<T>(m_values, id); }
 
 		template<typename T>
-		CompTVal(bool) del(ParamID id)
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, bool>
+		del(ParamID id)
 		{ return del<T>(m_values, id); }
 
 		template<typename T>
-		CompTVal(bool) has(ParamID id)
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, bool>
+		has(ParamID id)
 		{ return has<T>(m_values, id); }
 
 		template<typename T>
-		CompTFunc(Function<T>&) replace(ParamID id, ParamID old_id)
+		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		replace(ParamID id, ParamID old_id)
 		{ return replace<Function<T>>(m_functions, id, old_id); }
 
 		template<typename T>
-		CompTFunc(Function<T>&) replace(ParamID id)
+		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		replace(ParamID id)
 		{ return replace<Function<T>>(m_functions, id, id); }
 
 		template<typename T>
-		CompTFunc(Function<T>&) add(ParamID id)
+		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		add(ParamID id)
 		{ return add<Function<T>>(m_functions, id); }
 
 		template<typename T>
-		CompTFunc(Function<T>&) get(ParamID id)
+		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		get(ParamID id)
 		{ return get<Function<T>>(m_functions, id); }
 
 		template<typename T>
-		CompTFunc(bool) del(ParamID id)
+		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, bool>
+		del(ParamID id)
 		{ return del<Function<T>>(m_functions, id); }
 
 		template<typename T>
-		CompTFunc(bool) has(ParamID id)
+		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, bool>
+		has(ParamID id)
 		{ return has<Function<T>>(m_functions, id); }
 
 		template<typename T>
-		CompTComp(This&) replace(ParamID id, ParamID old_id)
+		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
+		replace(ParamID id, ParamID old_id)
 		{
 			auto &c = replace<T>(m_components, id, old_id);
 			c.setID(id);
@@ -250,7 +244,8 @@ namespace OpenEFW
 		}
 
 		template<typename T>
-		CompTComp(This&) replace(ParamID id)
+		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
+		replace(ParamID id)
 		{
 			auto &c = replace<T>(m_components, id, id);
 			c.setID(id);
@@ -259,7 +254,8 @@ namespace OpenEFW
 		}
 
 		template<typename T>
-		CompTComp(This&) add(ParamID id)
+		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
+		add(ParamID id)
 		{
 			auto &c = add<T>(m_components, id);
 			c.setID(id);
@@ -268,15 +264,18 @@ namespace OpenEFW
 		}
 
 		template<typename T>
-		CompTComp(This&) get(ParamID id)
+		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
+		get(ParamID id)
 		{ return get<T>(m_components, id); }
 
 		template<typename T>
-		CompTComp(bool) del(ParamID id)
+		enable_if_t<is_same<This, typename decay<T>::type>::value, bool>
+		del(ParamID id)
 		{ return del<T>(m_components, id); }
 
 		template<typename T>
-		CompTComp(bool) has(ParamID id)
+		enable_if_t<is_same<This, typename decay<T>::type>::value, bool>
+		has(ParamID id)
 		{ return has<T>(m_components, id); }
 
 		template<typename R = void, typename ...A>
@@ -296,50 +295,69 @@ namespace OpenEFW
 			}
 		}
 
-		template<typename C, typename I, typename T>
-		CompStaticTFunc(Function<T>&) get()
+		template<typename I, typename T>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value, Delegate<T>&>
+		get()
 		{
-			auto& current = static_function<C, I, T>();
+			auto& current = static_function<I, T>();
 			if (!current) ThrowNotExist(CompFunc);
 			return current;
 		};
 
-		template<typename C, typename I, typename T>
-		CompStaticTFunc(Function<T>&) add()
+		template<typename I, typename T>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value, Delegate<T>&>
+		add()
 		{
-			auto& current = static_function<C, I, T>();
+			auto& current = static_function<I, T>();
 			if (current) ThrowNotAdd(CompFunc);
 			return current;
 		};
 
-		template<typename C, typename I, typename T>
-		CompStaticTFunc(bool) add(Function<T> const& f)
+		template<typename I, typename T>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value && !is_array<T>::value, bool> // TODO: replace is_array<T> with sth that checks functions
+		add(T const& f)
 		{
-			auto& current = static_function<C, I, T>();
+			using F = Delegate<T>::Type;
+			auto& current = static_function<I, F>();
 			bool result = !current;
-			if(result) add<C, I, T>() = f;
+			if (result) current = f;
 			return result;
 		};
 
-		template<typename C, typename I, typename J = void, typename T>
-		CompStaticTFuncRpl(Function<T>&) replace()
+		template<typename I, typename J = void, typename T>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value && !is_same<I, J>::value, Delegate<T>&>
+		replace()
 		{
-			auto& func = static_function<C, I, T>();
+			auto& func = static_function<I, T>();
 			if (!func) ThrowNotExist(CompFunc);
-			auto& oldfunc = static_function<C, J, T>();
+			auto& oldfunc = static_function<J, T>();
 			oldfunc = func;
 			return func;
 		};
 
 		template<typename C, typename I, typename J = void, typename T>
-		CompStaticTFuncRpl(void) replace(Function<T> f)
+		enable_if_t<is_class<I>::value && is_trivial<I>::value && !is_same<I, J>::value, void>
+		replace(Delegate<T> f)
 		{ replace<C, I, J, T>() = f; };
 
-		template<typename C, typename I, typename R = void, typename ...A>
-		CompStaticTCall(R) call(A... args)
+		// invoke static function
+		template<typename I, typename R = void, typename ...A>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
+		invoke(A... args)
 		{
 			using T = R(A...);
-			auto f = static_function<C, I, T>();
+			auto f = static_function<I, T>();
+			if (!f) ThrowNotExist(CompFunc);
+			return (f)(forward<A>(args)...);
+		};
+
+		// call static function with current component object
+		template<typename I, typename R = void, typename ...A>
+		enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
+		call(A... args)
+		{
+			using T = R(This*,A...);
+			auto f = static_function<I, T>();
 			if (!f) ThrowNotExist(CompFunc);
 			return (f)(this, forward<A>(args)...);
 		};
@@ -351,6 +369,14 @@ namespace OpenEFW
 		template<typename T>
 		This& operator=(const Arguments<string, T>& in)
 		{ replace<T>(in.a1) = in.a2; return *this; };
+
+		template<typename T>
+		This& operator+=(const Arguments<const char*, T>& in)
+		{ add<T>(string(in.a1)) = in.a2; return *this; };
+
+		template<typename T>
+		This& operator=(const Arguments<const char*, T>& in)
+		{ replace<T>(string(in.a1)) = in.a2; return *this; };
 	
 		void operator()() { create(); };
 
