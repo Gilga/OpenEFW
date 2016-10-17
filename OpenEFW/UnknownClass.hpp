@@ -80,8 +80,7 @@ namespace OpenEFW
 
 	public:
 		virtual TypeInfo getTypeInfo() { return m_typeinfo; };
-
-		virtual string str() { return "[ UnknownClass ]"; };
+		virtual string to_str() { return "(Unknown Class)"; };
 	
 		// returns current object, thread secure
 		template<typename T> T* reconvert(){

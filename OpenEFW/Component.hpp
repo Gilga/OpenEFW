@@ -39,6 +39,8 @@
 #include "type_ios.hpp"
 #include "macros/default_exceptions.hpp"
 
+#include <vector>
+
 namespace OpenEFW
 {
 	class Component : public UnknownClass
@@ -57,14 +59,7 @@ namespace OpenEFW
 		This* m_parent = nullptr;
 		void setParent(This& c) { m_parent = &c; };
 
-		template<typename ...> struct ComponentFunction;
-
-		template<typename T, typename ...A>
-		struct ComponentFunction<T(A...)>
-		{ using Type = Delegate<T(This*, A...)>; };
-
 	public:
-		template<typename T> using Function = typename ComponentFunction<T>::Type;
 		template<typename T> using Value = Container<T>;
 		using BaseValue = Container<>;
 
@@ -126,39 +121,47 @@ namespace OpenEFW
 		template<typename I, typename T>
 		static inline string type_to_str()
 		{
-			static auto str = TypeInfo::Get<I>::to_str() + "::"
-				+ TypeInfo::Get<T>::to_str();
+			static auto str = TypeInfo::Get<I>::to_str() + "::"	+ TypeInfo::Get<T>::to_str();
 			return str;
 		};
 
-		template<typename I, typename T>
-		static inline Delegate<T>& static_function()
-		{ static Delegate<T> func; return func;	};
-
 	public:
+		~Component() { ~(*this); };
 
-		void printValues()
+		enum class LIST { VALUES, FUNCTIONS, COMPONENTS, ALL };
+
+		void reset(LIST id)
 		{
-			printf("\nValues of %s\n", c_str());
-			printf("--------------------\n");
-			m_values.loop([&](const Lists::Id& id, const Lists::Type &obj) { printf("%s\n", id.to_str().c_str()); return false; });
-			printf("--------------------\n");
+			if (id == LIST::VALUES) { m_values.clear(); }
+			else if (id == LIST::FUNCTIONS) { m_functions.clear(); }
+			else if (id == LIST::COMPONENTS) { m_components.clear(); }
+			else {
+				reset(LIST::VALUES);
+				reset(LIST::FUNCTIONS);
+				reset(LIST::COMPONENTS);
+			}
 		}
 
-		void printFunctions()
+		void print(ostream& ost, LIST id)
 		{
-			printf("\nFunctions of %s\n", c_str());
-			printf("--------------------\n");
-			m_functions.loop([&](const Lists::Id& id, const Lists::Type &obj) { printf("%s\n", id.to_str().c_str()); return false; });
-			printf("--------------------\n");
-		}
+			Lists* list = NULL;
+			string name = "?";
 
-		void printComponents()
-		{
-			printf("\nComponents of %s\n", c_str());
-			printf("--------------------\n");
-			m_components.loop([&](const Lists::Id& id, const Lists::Type &obj) { printf("%s\n", id.to_str().c_str()); return false; });
-			printf("--------------------\n");
+			if (id == LIST::VALUES) { name="VALUES"; list = &m_values; }
+			else if (id == LIST::FUNCTIONS) { name = "FUNCTIONS"; list = &m_functions; }
+			else if (id == LIST::COMPONENTS) { name = "COMPONENTS"; list = &m_components; }
+			else {
+				print(ost, LIST::VALUES);
+				print(ost, LIST::FUNCTIONS);
+				print(ost, LIST::COMPONENTS);
+				return;
+			}
+
+			if (list) {
+				ost << "\n" << name << " of " << c_str() << "\n--------------------\n";
+				list->loop([&](const Lists::Id& id, const Lists::Type &obj) { ost << id.to_str().c_str() << "\n"; return false; });
+				ost << "--------------------\n";
+			}
 		}
 
 		void setID(ParamID id) { m_id = Key(id); };
@@ -183,6 +186,20 @@ namespace OpenEFW
 		replace(ParamID id)
 		{ return replace<T>(m_values, id, id); }
 
+		template<typename T>
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
+		add(ParamID id)
+		{ return add<T>(m_values, id); }
+
+		template<typename T>
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value && !is_convertible<Delegate<>, T>::value, bool>
+		add(ParamID id, T obj)
+		{
+			auto r = !has<T>(id);
+			if (r) add<T>(m_values, id) = obj;
+			return r;
+		}
+
 		template<typename T, typename ...Args>
 		enable_if_t<is_constructible<T, Args...>::value && !is_same<This, typename decay<T>::type>::value, T&>
 		add(ParamID id, Args... args)
@@ -192,6 +209,15 @@ namespace OpenEFW
 		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
 		get(ParamID id)
 		{ return get<T>(m_values, id); }
+
+		template<typename T>
+		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value && !is_convertible<Delegate<>, T>::value, bool>
+		set(ParamID id, T obj)
+		{
+			auto r = has<T>(id);
+			if (r) get<T>(m_values, id) = obj;
+			return r;
+		}
 
 		template<typename T>
 		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, bool>
@@ -204,34 +230,54 @@ namespace OpenEFW
 		{ return has<T>(m_values, id); }
 
 		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
 		replace(ParamID id, ParamID old_id)
-		{ return replace<Function<T>>(m_functions, id, old_id); }
+		{ return replace<Delegate<T>>(m_functions, id, old_id); }
 
 		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
 		replace(ParamID id)
-		{ return replace<Function<T>>(m_functions, id, id); }
+		{ return replace<Delegate<T>>(m_functions, id, id); }
 
 		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		enable_if_t<!is_constructible<T>::value && !is_array<T>::value, bool> // TODO: replace is_array<T> with sth that checks functions
+		add(ParamID id, T const& f)
+		{
+			using C = Delegate<>::convert<T>::type;
+			auto r = !has<C>(id);
+			if (r) add<C>(m_functions, id) = f;
+			return r;
+		}
+
+		template<typename T>
+		enable_if_t<!is_constructible<T>::value && !is_array<T>::value && is_convertible<Delegate<>, Delegate<T>>::value, bool>
+		add(ParamID id, Delegate<T> const& f)
+		{
+			using C = Delegate<T>;
+			auto r = !has<C>(id);
+			if (r) add<C>(m_functions, id) = f;
+			return r;
+		}
+
+		template<typename T>
+		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
 		add(ParamID id)
-		{ return add<Function<T>>(m_functions, id); }
+		{ return add<Delegate<T>>(m_functions, id); }
 
 		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, Function<T>&>
+		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
 		get(ParamID id)
-		{ return get<Function<T>>(m_functions, id); }
+		{ return get<Delegate<T>>(m_functions, id); }
 
 		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, bool>
+		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, bool>
 		del(ParamID id)
-		{ return del<Function<T>>(m_functions, id); }
+		{ return del<Delegate<T>>(m_functions, id); }
 
 		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Function<T>>::value, bool>
+		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, bool>
 		has(ParamID id)
-		{ return has<Function<T>>(m_functions, id); }
+		{ return has<Delegate<T>>(m_functions, id); }
 
 		template<typename T>
 		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
@@ -278,89 +324,51 @@ namespace OpenEFW
 		has(ParamID id)
 		{ return has<T>(m_components, id); }
 
+		// call with "this" parameter 
+		template<typename R = void, typename ...A>
+		R self(ParamID id, A... args)
+		{
+			using T = R(This*, A...);
+			if (!has<T>(id)) ThrowNotExist(CompType);
+			return get<T>(id)(this, forward<A>(args)...);
+		};
+
+		// call without "this" parameter 
 		template<typename R = void, typename ...A>
 		R call(ParamID id, A... args)
 		{
 			using T = R(A...);
 			if (!has<T>(id)) ThrowNotExist(CompType);
-			return get<T>(id)(this, forward<A>(args)...);
+			return get<T>(id)(forward<A>(args)...);
 		};
 
-		template<typename T>
-		void invoke(ParamID id)
+		template<typename R = void, typename ...A>
+		R invoke(ParamID comp_id, ParamID id, A... args)
 		{
+			return get<Component>(comp_id).call<R>(id, forward<A>(args)...);
+		}
+
+		// invoke a function per component with results
+		template<typename R, typename ...A>
+		void invokeAll(std::vector<R>& results, ParamID id, A... args)
+		{
+			using T = R(A...);
 			for (auto &e : m_components.source()) {
-				auto &c = *e.second.get()->get<This>();
-				if (c.has<T>()) c.call<T>(id);
+				auto &c = reconvertValue<Component>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				if (c.has<T>()) results.push_back(c.call<T>(id, forward<A>(args)...));
 			}
 		}
 
-		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value, Delegate<T>&>
-		get()
-		{
-			auto& current = static_function<I, T>();
-			if (!current) ThrowNotExist(CompFunc);
-			return current;
-		};
-
-		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value, Delegate<T>&>
-		add()
-		{
-			auto& current = static_function<I, T>();
-			if (current) ThrowNotAdd(CompFunc);
-			return current;
-		};
-
-		template<typename I, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && !is_array<T>::value, bool> // TODO: replace is_array<T> with sth that checks functions
-		add(T const& f)
-		{
-			using F = Delegate<T>::Type;
-			auto& current = static_function<I, F>();
-			bool result = !current;
-			if (result) current = f;
-			return result;
-		};
-
-		template<typename I, typename J = void, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && !is_same<I, J>::value, Delegate<T>&>
-		replace()
-		{
-			auto& func = static_function<I, T>();
-			if (!func) ThrowNotExist(CompFunc);
-			auto& oldfunc = static_function<J, T>();
-			oldfunc = func;
-			return func;
-		};
-
-		template<typename C, typename I, typename J = void, typename T>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value && !is_same<I, J>::value, void>
-		replace(Delegate<T> f)
-		{ replace<C, I, J, T>() = f; };
-
-		// invoke static function
-		template<typename I, typename R = void, typename ...A>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
-		invoke(A... args)
+		// invoke a function per component without results
+		template<typename R = void, typename ...A>
+		void invokeAll(ParamID id, A... args)
 		{
 			using T = R(A...);
-			auto f = static_function<I, T>();
-			if (!f) ThrowNotExist(CompFunc);
-			return (f)(forward<A>(args)...);
-		};
-
-		// call static function with current component object
-		template<typename I, typename R = void, typename ...A>
-		enable_if_t<is_class<I>::value && is_trivial<I>::value, R>
-		call(A... args)
-		{
-			using T = R(This*,A...);
-			auto f = static_function<I, T>();
-			if (!f) ThrowNotExist(CompFunc);
-			return (f)(this, forward<A>(args)...);
-		};
+			for (auto &e : m_components.source()) {
+				auto &c = reconvertValue<Component>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				if (c.has<T>()) c.call<T>(id, forward<A>(args)...);
+			}
+		}
 
 		template<typename T>
 		This& operator+=(const Arguments<string, T>& in)
@@ -378,6 +386,7 @@ namespace OpenEFW
 		This& operator=(const Arguments<const char*, T>& in)
 		{ replace<T>(string(in.a1)) = in.a2; return *this; };
 	
+		void operator~() { destroy(); };
 		void operator()() { create(); };
 
 		This& operator=(const This& other){ copy(const_cast<This&>(other)); return *this; };
@@ -389,9 +398,9 @@ namespace OpenEFW
 		bool operator!=(const decltype(m_id)& other){ return !(*this == other); };
 		bool operator!=(const ParamID& other){ return !(*this == other); };
 
-		friend string operator+(const char* other, This& o) { return other + o.str(); };
-		friend string operator+(string &other, This& o) { return other + o.str(); };
-		friend void operator+=(string &other, This& o) { other += o.str(); };
+		friend string operator+(const char* other, This& o) { return other + o.to_str(); };
+		friend string operator+(string &other, This& o) { return other + o.to_str(); };
+		friend void operator+=(string &other, This& o) { other += o.to_str(); };
 		friend ostream& operator<<(ostream &other, This& o) { return other << "Component [" + o + "]"; };
 
 		#define NewComponent(x) \
@@ -406,12 +415,6 @@ namespace OpenEFW
 		explicit This(ParamID id) { setID(id); }; \
 		explicit This(bool usepreset) { if (usepreset) preset(*this); }; \
 		explicit This(ParamID id, bool usepreset) { setID(id); if (usepreset) preset(*this); };
-
-		~Component()
-		{
-			if (m_created && has<void()>("@delete"))
-				call("@delete");
-		};
 
 	protected:
 
@@ -448,8 +451,18 @@ namespace OpenEFW
 
 		void create()
 		{
-			if (!m_created) m_created = true;
-			if (has<void()>("@create")) call("@create");
+			if (!m_created && has<void(This*)>("@create")) {
+				m_created = true;
+				self("@create");
+			}
+		};
+
+		void destroy()
+		{
+			if (m_created && has<void(This*)>("@delete")) {
+				self("@delete");
+				m_created = false;
+			}
 		};
 
 	public:
@@ -464,7 +477,7 @@ namespace OpenEFW
 			copy(m_functions, other.m_functions);
 			copy(m_components, other.m_components);
 
-			if (m_created && has<void()>("@copy")) call("@copy");
+			if (m_created && has<void(This*)>("@copy")) self("@copy");
 		};
 
 		void steal(This& other)
@@ -473,7 +486,7 @@ namespace OpenEFW
 			steal(m_functions, other.m_functions);
 			steal(m_components, other.m_components);
 
-			if (m_created && has<void()>("@steal")) call("@steal");
+			if (m_created && has<void(This*)>("@steal")) self("@steal");
 		};
 
 		void swap(This& other)
@@ -482,29 +495,18 @@ namespace OpenEFW
 			swap(m_functions, other.m_functions);
 			swap(m_components, other.m_components);
 
-			if (m_created && has<void()>("@swap")) call("@swap");
+			if (m_created && has<void(This*)>("@swap")) self("@swap");
 		};
 
 		void restart() { m_created = false; (*this)(); }
 
-		void resetValues(){ m_values.clear(); }
-		void resetFunctions(){ m_functions.clear(); }
-		void resetComponents(){ m_components.clear(); }
-
-		void reset()
-		{
-			resetValues();
-			resetFunctions();
-			resetComponents();
-		}
-	
 		static void preset(Component& c)
 		{
-			if (!c.has<void()>("@create")) c.add<void()>("@create") = [](This*){};
-			if (!c.has<void()>("@delete")) c.add<void()>("@delete") = [](This*){};
-			if (!c.has<void()>("@copy")) c.add<void()>("@copy") = [](This*){};
-			if (!c.has<void()>("@steal")) c.add<void()>("@steal") = [](This*){};
-			if (!c.has<void()>("@swap")) c.add<void()>("@swap") = [](This*){};
+			c.add("@create", [&](This*) {});
+			c.add("@delete", [&](This*) {});
+			c.add("@copy", [&](This*) {});
+			c.add("@steal", [&](This*) {});
+			c.add("@swap", [&](This*) {});
 		};
 	};
 };

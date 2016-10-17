@@ -35,6 +35,7 @@
 
 namespace OpenEFW
 {
+	using ::std::is_bind_expression;
 	using ::std::binary_function;
 	using ::std::hash;
 };

@@ -51,13 +51,8 @@ namespace OpenEFW
 {
 	template <typename ...T> class Delegate;
 
-	template <typename T> struct Delegate<T> : public Delegate<decltype(&T::operator())> {};
-	template <typename C, typename R, typename... A> struct Delegate<R(C::*)(A...) const> : public Delegate<R(A...)> {
-		using ClassType = C;
-		using FunctionType = R(C::*)(A...) const;
-	};
-
-	template<> class Delegate<> {
+	template<> class Delegate<>
+	{
 	protected:
 		using This = Delegate<>;
 		
@@ -75,6 +70,17 @@ namespace OpenEFW
 			if (m_typeinfo.hasType<T>())  return static_cast<Delegate<T>*>(this);
 			return nullptr;
 		}
+
+		template <typename ...T> class convert;
+
+		template <typename T> struct convert<T> : public enable_if_t<!is_function<T>::value && !is_bind_expression<T>::value, typename convert<decltype(&T::operator())>> {};
+
+		template <typename C, typename R, typename... A> struct convert<R(C::*)(A...) const>
+		{
+			using classtype = C;
+			using functype = R(C::*)(A...) const;
+			using type = Delegate<R(A...)>;
+		};
 	};
 
 	template<typename R, typename ...A>
