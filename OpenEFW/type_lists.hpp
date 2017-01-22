@@ -34,12 +34,14 @@
 #include <unordered_map>
 #include <map>
 #include <set>
+#include <vector>
 
 namespace OpenEFW
 {
 	using ::std::unordered_map;
 	using ::std::map;
 	using ::std::set;
+	using ::std::vector;
 };
 
 #endif

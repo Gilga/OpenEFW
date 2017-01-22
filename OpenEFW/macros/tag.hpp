@@ -35,6 +35,7 @@
 #include "../Tags.hpp"
 
 #define TAG_NEW(x) namespace Tag { struct x; };
+#define TAGS_NEW(...) NARGS_S(NARGS_EMPTY, TAG_NEW, __VA_ARGS__)
 #define TAG_MACRO(x)  ::Tag::x
 #define TAG(...) ::OpenEFW::Tags<NARGS_MACRO(TAG_MACRO,__VA_ARGS__)>
 

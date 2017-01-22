@@ -30,22 +30,28 @@
 #pragma once
 
 #ifndef NARGS
+#define NARGS
+#define NARGS_EMPTY()
 
-#define NARGS_1(m, x1) m(x1)
-#define NARGS_2(m, x1, x2) m(x1), m(x2)
-#define NARGS_3(m, x1, x2, x3) m(x1), m(x2), m(x3)
-#define NARGS_4(m, x1, x2, x3, x4) m(x1), m(x2), m(x3), m(x4)
-#define NARGS_5(m, x1, x2, x3, x4, x5) m(x1), m(x2), m(x3), m(x4), m(x5)
-#define NARGS_6(m, x1, x2, x3, x4, x5, x6) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6)
-#define NARGS_7(m, x1, x2, x3, x4, x5, x6, x7) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7)
-#define NARGS_8(m, x1, x2, x3, x4, x5, x6, x7, x8) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7), m(x8)
-#define NARGS_9(m, x1, x2, x3, x4, x5, x6, x7, x8, x9) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7), m(x8), m(x9)
-#define NARGS_10(m, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) m(x1), m(x2), m(x3), m(x4), m(x5), m(x6), m(x7), m(x8), m(x9), m(x10)
+#define NARGS_ARG(x) x
+#define NARGS_CAT(x, y) NARGS_ARG(x) ## NARGS_ARG(y)
+#define NARGS_COUNT(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N, ...) N
 
-#define NARGS_ID(x) x
-#define NARGS_CAT(x, y) x ## y
-#define NARGS_SEQ(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N, ...) NARGS_CAT(NARGS_, N)
-#define NARGS_MACRO(macro,...) NARGS_ID(NARGS_SEQ(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)(macro,__VA_ARGS__))
+#define NARGS_1(s, m, x1) m(x1)
+#define NARGS_2(s, m, x1, x2) m(x1) ## s() ## m(x2)
+#define NARGS_3(s, m, x1, x2, x3) m(x1) ## s() ## NARGS_2(s, m, x2, x3)
+#define NARGS_4(s, m, x1, x2, x3, x4) m(x1) ## s() ## NARGS_3(s, m, x2, x3, x4)
+#define NARGS_5(s, m, x1, x2, x3, x4, x5) m(x1) ## s() ## NARGS_4(s, m, x2, x3, x4, x5)
+#define NARGS_6(s, m, x1, x2, x3, x4, x5, x6) m(x1) ## s() ## NARGS_5(s, m, x2, x3, x4, x5, x6)
+#define NARGS_7(s, m, x1, x2, x3, x4, x5, x6, x7) m(x1) ## s() ## NARGS_6(s, m, x2, x3, x4, x5, x6, x7)
+#define NARGS_8(s, m, x1, x2, x3, x4, x5, x6, x7, x8) m(x1) ## s() ## NARGS_7(s, m, x2, x3, x4, x5, x6, x7, x8)
+#define NARGS_9(s, m, x1, x2, x3, x4, x5, x6, x7, x8, x9) m(x1) ## s() ## NARGS_8(s, m, x2, x3, x4, x5, x6, x7, x8, x9)
+#define NARGS_10(s, m, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) m(x1) ## s() ## NARGS_9(s, m, x2, x3, x4, x5, x6, x7, x8, x9, x10)
+
+#define NARGS_S(split,macro,...) NARGS_CAT(NARGS_, NARGS_COUNT(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))(split, macro,__VA_ARGS__)
+
+#define NARGS_SEPARATOR() ,
+#define NARGS_MACRO(macro,...) NARGS_S(NARGS_SEPARATOR, macro,__VA_ARGS__)
 
 #define NARGS
 #endif

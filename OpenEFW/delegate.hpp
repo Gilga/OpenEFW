@@ -71,15 +71,28 @@ namespace OpenEFW
 			return nullptr;
 		}
 
-		template <typename ...T> class convert;
+		template <typename ...T> class convert_process;
 
-		template <typename T> struct convert<T> : public enable_if_t<!is_function<T>::value && !is_bind_expression<T>::value, typename convert<decltype(&T::operator())>> {};
-
-		template <typename C, typename R, typename... A> struct convert<R(C::*)(A...) const>
+		template <typename C, typename R, typename... A> struct convert_process<R(C::*)(A...) const>
 		{
 			using classtype = C;
 			using functype = R(C::*)(A...) const;
 			using type = Delegate<R(A...)>;
+		};
+
+		template <typename T> struct convert_process<T>
+		{
+			using classtype = void;
+			using functype = void;
+			using type = typename conditional<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>, T>::type;
+		};
+
+		template<bool _Test, class _Tx = void, class _Ty = void> struct can_convert {};
+		template<class _Tx, class _Ty>	struct can_convert<false, _Tx, _Ty> : public convert_process<_Ty> {};
+		template<class _Tx, class _Ty>	struct can_convert<true, _Tx, _Ty> : public convert_process<decltype(&_Tx::operator())> {};
+
+		template <typename T> struct convert {
+			using type = typename can_convert<(!is_constructible<T>::value && !is_array<T>::value && !is_function<T>::value && !is_bind_expression<T>::value), T, T>::type;
 		};
 	};
 
@@ -96,6 +109,16 @@ namespace OpenEFW
 		Delegate(void* const o, stub_ptr_type const m) _NOEXCEPT :
 		m_object_ptr(o), m_stub_ptr(m) { default(); }
 
+		void copy(const Delegate& other)
+		{
+			m_object_ptr = other.m_object_ptr;
+			m_func_ptr = other.m_func_ptr;
+			m_deleter = other.m_deleter;
+			m_store = other.m_store;
+			m_store_size = other.m_store_size;
+			m_stub_ptr = other.m_stub_ptr;
+		}
+
 	public:
 		using ReturnType = R;
 		using Type = R(A...);
@@ -104,7 +127,7 @@ namespace OpenEFW
 
 		Delegate() { default(); } // = default;
 
-		Delegate(Delegate const&) = default;
+		Delegate(This const& other) { default(); copy(other); } //= default;
 
 		// This won't work (tested in MSVC)
 		//Delegate(Delegate&&) = default; 
@@ -158,7 +181,7 @@ namespace OpenEFW
 			m_deleter = deleter_stub<functor_type>;
 		}
 
-		Delegate& operator=(Delegate const&) = default;
+		Delegate& operator=(Delegate const& other) { copy(other); return *this; }; //= default;
 
 		template <class C>
 		Delegate& operator=(R(C::* const rhs)(A...)){

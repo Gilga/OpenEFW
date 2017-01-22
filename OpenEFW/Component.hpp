@@ -57,6 +57,7 @@ namespace OpenEFW
 
 		bool m_created = false;
 		This* m_parent = nullptr;
+
 		void setParent(This& c) { m_parent = &c; };
 
 	public:
@@ -72,48 +73,43 @@ namespace OpenEFW
 		
 		#define CompID(x)  "[" + to_str() + "::" + x + "] "
 		#define CompType CompID(id) + TypeInfo::Get<Value<T>>::to_str()
-		#define CompFunc CompID("@static") + type_to_str<I,T>()
+
+		//template<typename T> Key key(ParamID id) { return Key::create<T>(id); }
 
 		template<typename T>
-		T& replace(Lists &lists, ParamID id, ParamID old_id)
+		enable_if_t<!is_same<This, typename decay<T>::type>::value, void>
+		update(ParamID id, T& c) {} // do nothing if not a component
+
+		template<typename T>
+		enable_if_t<is_same<This, typename decay<T>::type>::value, void>
+		update(ParamID id, T& c) {
+			c.setID(id);
+			c.setParent(*this);
+		}
+
+		template<typename _T, typename ...Args, typename T = Delegate<>::convert<_T>::type>
+		T& add(Lists &lists, Key k, Args... args)
 		{
-			auto &value = get<T>(lists, id);
-			if (old_id != id) get<T>(lists, old_id) = value; // old
-			// / && !lists.replace(old_id, new Value<T>(value))) CompNoRpl(TypeInfo::Get<Value<T>>::str());  // 
+			if (!lists.add(k, new Value<T>(forward<Args>(args)...))) { auto& id = k.to_str(); ThrowNotAdd(CompType); }
+			auto& value = get<T>(lists, k);
+			update(k.to_str(), value);
 			return value;
 		}
 
-		template<typename T, typename ...Args>
-		T& add(Lists &lists, ParamID id, Args... args)
+		template<typename _T, typename T = Delegate<>::convert<_T>::type>
+		T& get(Lists &lists, Key k)
 		{
-			if (!lists.add(Key::create<T>(id), new Value<T>(forward<Args>(args)...))) ThrowNotAdd(CompType);
-			return get<T>(lists, id);
-		}
-
-		template<typename T>
-		bool del(Lists &lists, ParamID id)
-		{
-			if (!has<T>(lists, key)) ThrowNotExist(CompType);
-			return lists.del(Key::create<T>(id));
-		}
-
-		template<typename T>
-		T& get(Lists &lists, ParamID id)
-		{
-			if (!has<T>(lists, id)) ThrowNotExist(CompType);
-			auto base = lists.get(Key::create<T>(id));
-			return **reconvertValue<T>(id, base);
+			auto& id = k.to_str();
+			if (!lists.has(k)) ThrowNotExist(CompType);
+			auto base = lists.get(k);
+			return **reconvert<T>(id, base);
 		};
 
-		template<typename T>
-		bool has(Lists &lists, ParamID id)
-		{ return lists.has(Key::create<T>(id));	};
-
-		template<typename T>
-		Value<T>* reconvertValue(ParamID id, BaseValue* base)
+		template<typename _T, typename T = Value<Delegate<>::convert<_T>::type>>
+		T* reconvert(ParamID id, BaseValue* base)
 		{
 			if (!base) ThrowIsNull(CompType);
-			auto value = base ? base->reconvert<Value<T>>() : nullptr; //base->cast<T>()
+			auto value = base ? base->reconvert<T>() : nullptr; //base->cast<T>()
 			if (!value) ThrowNotCast(CompType);
 			return value;
 		}
@@ -125,43 +121,85 @@ namespace OpenEFW
 			return str;
 		};
 
+		template<typename T>
+		Lists& list()
+		{
+			Lists *l = NULL;
+
+			using Type = Delegate<>::convert<T>::type;
+
+			auto v = is_constructible<Type>::value;
+			auto c = is_same<This, typename decay<Type>::type>::value;
+			auto f = is_convertible<Delegate<>, Type>::value; //is_convertible<Delegate<>, Delegate<T>>::value || 
+
+			v = v && !c && !f;
+			c = c && !f && !v;
+			f = f && !c && !v;
+
+			if (v) l = &m_values;
+			else if (c) l = &m_components;
+			else if (f) l = &m_functions;
+			else ThrowNotExist(string("List"));
+
+			return *l;
+		}
+
+		template<typename T>
+		void useOnLists(T f)
+		{
+			f(m_values);
+			f(m_functions);
+			f(m_components);
+		}
+
+		template<typename T>
+		void useOnLists(This& other, T f)
+		{
+			f(m_values, other.m_values);
+			f(m_functions, other.m_functions);
+			f(m_components, other.m_components);
+		}
+
 	public:
 		~Component() { ~(*this); };
 
 		enum class LIST { VALUES, FUNCTIONS, COMPONENTS, ALL };
 
+		Lists& getList(LIST id)
+		{
+			Lists* l = NULL;
+
+			if (id == LIST::VALUES) l = &m_values;
+			else if (id == LIST::FUNCTIONS) l = &m_functions;
+			else if (id == LIST::COMPONENTS) l = &m_components;
+			else ThrowNotExist(string("List"));
+
+			return *l;
+		};
+
 		void reset(LIST id)
 		{
-			if (id == LIST::VALUES) { m_values.clear(); }
-			else if (id == LIST::FUNCTIONS) { m_functions.clear(); }
-			else if (id == LIST::COMPONENTS) { m_components.clear(); }
-			else {
-				reset(LIST::VALUES);
-				reset(LIST::FUNCTIONS);
-				reset(LIST::COMPONENTS);
-			}
+			if (id == LIST::ALL) useOnLists([](Lists& l) { l.clear(); });
+			else getList(id).clear();
 		}
 
 		void print(ostream& ost, LIST id)
 		{
-			Lists* list = NULL;
-			string name = "?";
+			auto f = [&](Lists& l)
+			{
+				string name = "?";
 
-			if (id == LIST::VALUES) { name="VALUES"; list = &m_values; }
-			else if (id == LIST::FUNCTIONS) { name = "FUNCTIONS"; list = &m_functions; }
-			else if (id == LIST::COMPONENTS) { name = "COMPONENTS"; list = &m_components; }
-			else {
-				print(ost, LIST::VALUES);
-				print(ost, LIST::FUNCTIONS);
-				print(ost, LIST::COMPONENTS);
-				return;
-			}
+				if (id == LIST::VALUES) name = "VALUES";
+				else if (id == LIST::FUNCTIONS) name = "FUNCTIONS";
+				else if (id == LIST::COMPONENTS) name = "COMPONENTS";
 
-			if (list) {
 				ost << "\n" << name << " of " << c_str() << "\n--------------------\n";
-				list->loop([&](const Lists::Id& id, const Lists::Type &obj) { ost << id.to_str().c_str() << "\n"; return false; });
+				l.loop([&](const Lists::Id& id, const Lists::Type &obj) { ost << id.to_str().c_str() << "\n"; return false; });
 				ost << "--------------------\n";
-			}
+			};
+
+			if (id == LIST::ALL) useOnLists(f);
+			else f(getList(id));
 		}
 
 		void setID(ParamID id) { m_id = Key(id); };
@@ -172,219 +210,140 @@ namespace OpenEFW
 
 		This& parent() { return *m_parent; };
 
-		Lists& values() { return m_values; };
-		Lists& functions() { return m_functions; };
-		Lists& components() { return m_components; };
+		// ------------------------------
 
 		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
-		replace(ParamID id, ParamID old_id)
-		{ return replace<T>(m_values, id, old_id); }
-
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
-		replace(ParamID id)
-		{ return replace<T>(m_values, id, id); }
-
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
-		add(ParamID id)
-		{ return add<T>(m_values, id); }
-
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value && !is_convertible<Delegate<>, T>::value, bool>
-		add(ParamID id, T obj)
+		Key key(ParamID id)
 		{
-			auto r = !has<T>(id);
-			if (r) add<T>(m_values, id) = obj;
+			return Key::create<Delegate<>::convert<T>::type>(id);
+		}
+
+		template<typename T>
+		bool del(ParamID id)
+		{
+			auto& l = list<T>();
+			auto& k = key<T>(id);
+			if (!l.has(k)) ThrowNotExist(CompType);
+			return l.del(k);
+		}
+
+		template<typename T>
+		bool has(ParamID id) { return list<T>().has(key<T>(id)); };
+
+		template<typename T>
+		bool set(ParamID id, T const& obj)
+		{
+			auto& l = list<T>();
+			auto& k = key<T>(id);
+			auto r = l.has(k);
+			if (r) { update(k.to_str(), obj); get<T>(l, k) = obj; }
 			return r;
 		}
 
 		template<typename T, typename ...Args>
-		enable_if_t<is_constructible<T, Args...>::value && !is_same<This, typename decay<T>::type>::value, T&>
-		add(ParamID id, Args... args)
-		{ return add<T>(m_values, id, forward<Args>(args)...); }
-
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, T&>
-		get(ParamID id)
-		{ return get<T>(m_values, id); }
-
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value && !is_convertible<Delegate<>, T>::value, bool>
-		set(ParamID id, T obj)
+		bool add(ParamID id, T const& obj, Args... args)
 		{
-			auto r = has<T>(id);
-			if (r) get<T>(m_values, id) = obj;
+			auto& k = key<T>(id);
+			auto& l = list<T>();
+			auto r = !l.has(k);
+			if (r) add<T>(l, k, forward<Args>(args)...) = obj;
 			return r;
 		}
 
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, bool>
-		del(ParamID id)
-		{ return del<T>(m_values, id); }
-
-		template<typename T>
-		enable_if_t<is_constructible<T>::value && !is_same<This, typename decay<T>::type>::value, bool>
-		has(ParamID id)
-		{ return has<T>(m_values, id); }
-
-		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
-		replace(ParamID id, ParamID old_id)
-		{ return replace<Delegate<T>>(m_functions, id, old_id); }
-
-		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
-		replace(ParamID id)
-		{ return replace<Delegate<T>>(m_functions, id, id); }
-
-		template<typename T>
-		enable_if_t<!is_constructible<T>::value && !is_array<T>::value, bool> // TODO: replace is_array<T> with sth that checks functions
-		add(ParamID id, T const& f)
+		template<typename _T, typename ...Args, typename T = Delegate<>::convert<_T>::type>
+		T& add(ParamID id, Args... args)
 		{
-			using C = Delegate<>::convert<T>::type;
-			auto r = !has<C>(id);
-			if (r) add<C>(m_functions, id) = f;
-			return r;
+			return add<T>(list<T>(), key<T>(id), forward<Args>(args)...);
+		}
+
+		template<typename _T, typename T = Delegate<>::convert<_T>::type>
+		T& get(ParamID id)
+		{
+			return get<T>(list<T>(), key<T>(id));
 		}
 
 		template<typename T>
-		enable_if_t<!is_constructible<T>::value && !is_array<T>::value && is_convertible<Delegate<>, Delegate<T>>::value, bool>
-		add(ParamID id, Delegate<T> const& f)
+		bool replace(ParamID id, T& value)
 		{
-			using C = Delegate<T>;
-			auto r = !has<C>(id);
-			if (r) add<C>(m_functions, id) = f;
-			return r;
+			return replace(id, id, value);
+		};
+
+		template<typename T>
+		bool replace(ParamID id, ParamID old_id, T& newvalue)
+		{
+			bool rpl = (old_id != id);
+
+			auto& l = list<T>();
+			auto& k = key<T>(id);
+			auto& k_ = key<T>(old_id);
+			auto& value = l.has(k) ? get<T>(l, k) : add<T>(l, k);
+
+			if (rpl) {
+				auto &old = get<T>(l, k_);
+				old = value;
+				update(old_id, old);
+			}
+
+			value = newvalue;
+			update(id, value);
+
+			// / && !l.replace(old_id, new Value<T>(value))) CompNoRpl(TypeInfo::Get<Value<T>>::str());  // 
+			return rpl;
 		}
 
-		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
-		add(ParamID id)
-		{ return add<Delegate<T>>(m_functions, id); }
-
-		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>&>
-		get(ParamID id)
-		{ return get<Delegate<T>>(m_functions, id); }
-
-		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, bool>
-		del(ParamID id)
-		{ return del<Delegate<T>>(m_functions, id); }
-
-		template<typename T>
-		enable_if_t<is_convertible<Delegate<>, Delegate<T>>::value, bool>
-		has(ParamID id)
-		{ return has<Delegate<T>>(m_functions, id); }
-
-		template<typename T>
-		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
-		replace(ParamID id, ParamID old_id)
-		{
-			auto &c = replace<T>(m_components, id, old_id);
-			c.setID(id);
-			setParent(c);
-			return c;
-		}
-
-		template<typename T>
-		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
-		replace(ParamID id)
-		{
-			auto &c = replace<T>(m_components, id, id);
-			c.setID(id);
-			setParent(c);
-			return c;
-		}
-
-		template<typename T>
-		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
-		add(ParamID id)
-		{
-			auto &c = add<T>(m_components, id);
-			c.setID(id);
-			setParent(c);
-			return c;
-		}
-
-		template<typename T>
-		enable_if_t<is_same<This, typename decay<T>::type>::value, This&>
-		get(ParamID id)
-		{ return get<T>(m_components, id); }
-
-		template<typename T>
-		enable_if_t<is_same<This, typename decay<T>::type>::value, bool>
-		del(ParamID id)
-		{ return del<T>(m_components, id); }
-
-		template<typename T>
-		enable_if_t<is_same<This, typename decay<T>::type>::value, bool>
-		has(ParamID id)
-		{ return has<T>(m_components, id); }
+		// ------------------------------
 
 		// call with "this" parameter 
 		template<typename R = void, typename ...A>
 		R self(ParamID id, A... args)
-		{
-			using T = R(This*, A...);
-			if (!has<T>(id)) ThrowNotExist(CompType);
-			return get<T>(id)(this, forward<A>(args)...);
-		};
+		{ return get<R(This*, A...)>(id)(this, forward<A>(args)...); };
 
 		// call without "this" parameter 
 		template<typename R = void, typename ...A>
 		R call(ParamID id, A... args)
-		{
-			using T = R(A...);
-			if (!has<T>(id)) ThrowNotExist(CompType);
-			return get<T>(id)(forward<A>(args)...);
-		};
+		{ return get<R(A...)>(id)(forward<A>(args)...); };
 
 		template<typename R = void, typename ...A>
 		R invoke(ParamID comp_id, ParamID id, A... args)
-		{
-			return get<Component>(comp_id).call<R>(id, forward<A>(args)...);
-		}
+		{ return get<This>(comp_id).call<R>(id, forward<A>(args)...); }
 
 		// invoke a function per component with results
 		template<typename R, typename ...A>
-		void invokeAll(std::vector<R>& results, ParamID id, A... args)
+		void invoke(std::vector<R>& results, ParamID id, A... args)
 		{
 			using T = R(A...);
 			for (auto &e : m_components.source()) {
-				auto &c = reconvertValue<Component>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				auto &c = reconvert<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
 				if (c.has<T>()) results.push_back(c.call<T>(id, forward<A>(args)...));
 			}
 		}
 
 		// invoke a function per component without results
 		template<typename R = void, typename ...A>
-		void invokeAll(ParamID id, A... args)
+		void invoke(ParamID id, A... args)
 		{
 			using T = R(A...);
 			for (auto &e : m_components.source()) {
-				auto &c = reconvertValue<Component>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
-				if (c.has<T>()) c.call<T>(id, forward<A>(args)...);
+				auto &c = reconvert<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				if (c.has<T>()) c.callT>(id, forward<A>(args)...);
 			}
 		}
 
 		template<typename T>
 		This& operator+=(const Arguments<string, T>& in)
-		{ add<T>(in.a1) = in.a2; return *this; };
-
-		template<typename T>
-		This& operator=(const Arguments<string, T>& in)
-		{ replace<T>(in.a1) = in.a2; return *this; };
+		{ add(in.a1, in.a2); return *this; };
 
 		template<typename T>
 		This& operator+=(const Arguments<const char*, T>& in)
-		{ add<T>(string(in.a1)) = in.a2; return *this; };
+		{ add(string(in.a1), in.a2); return *this; };
+
+		template<typename T>
+		This& operator=(const Arguments<string, T>& in)
+		{ replace(in.a1, in.a2); return *this; };
 
 		template<typename T>
 		This& operator=(const Arguments<const char*, T>& in)
-		{ replace<T>(string(in.a1)) = in.a2; return *this; };
+		{ replace(string(in.a1), in.a2); return *this; };
 	
 		void operator~() { destroy(); };
 		void operator()() { create(); };
@@ -418,37 +377,6 @@ namespace OpenEFW
 
 	protected:
 
-		void copy(Lists& that, Lists& other)
-		{
-			that.clear();
-			//other.loop([&](const Lists::Id& id, const Lists::Type &obj) { that.add(id, reconvertValue<T>(obj)); return false; });
-			for (auto &e : other.source()) that.add(e.first, e.second.get());
-		}
-
-		void steal(Lists& that, Lists& other)
-		{
-			that.clear();
-			that = other;
-			other.setRemover([&](const Lists::Id& id, const Lists::Type &obj){}); // this object does not own objects anymore => no deletion
-			other.clear();
-			other.defaultRemover();
-		}
-
-		void swap(Lists& that, Lists& other)
-		{
-			auto saved = that;
-
-			that.setRemover([&](const Lists::Id& id, const Lists::Type &obj){});
-			that = other;
-			that.defaultRemover();
-
-			other.setRemover([&](const Lists::Id& id, const Lists::Type &obj){});
-			other = saved;
-			other.defaultRemover();
-
-			saved.setRemover([&](const Lists::Id& id, const Lists::Type &obj){});
-		}
-
 		void create()
 		{
 			if (!m_created && has<void(This*)>("@create")) {
@@ -473,27 +401,46 @@ namespace OpenEFW
 			if (!m_created) m_created = other.m_created;
 			if (!m_parent) m_parent = other.m_parent;
 
-			copy(m_values, other.m_values);
-			copy(m_functions, other.m_functions);
-			copy(m_components, other.m_components);
+			useOnLists(other, [&](Lists& that, Lists& other)
+			{
+				that.clear();
+				//other.loop([&](const Lists::Id& id, const Lists::Type &obj) { that.add(id, reconvert<T>(obj)); return false; });
+				for (auto &e : other.source()) that.add(e.first, e.second.get());
+			});
 
 			if (m_created && has<void(This*)>("@copy")) self("@copy");
 		};
 
 		void steal(This& other)
 		{
-			steal(m_values, other.m_values);
-			steal(m_functions, other.m_functions);
-			steal(m_components, other.m_components);
+			useOnLists(other, [&](Lists& that, Lists& other)
+			{
+				that.clear();
+				that = other;
+				other.setRemover([&](const Lists::Id& id, const Lists::Type &obj) {}); // this object does not own objects anymore => no deletion
+				other.clear();
+				other.defaultRemover();
+			});
 
 			if (m_created && has<void(This*)>("@steal")) self("@steal");
 		};
 
 		void swap(This& other)
 		{
-			swap(m_values, other.m_values);
-			swap(m_functions, other.m_functions);
-			swap(m_components, other.m_components);
+			useOnLists(other, [&](Lists& that, Lists& other)
+			{
+				auto saved = that;
+
+				that.setRemover([&](const Lists::Id& id, const Lists::Type &obj) {});
+				that = other;
+				that.defaultRemover();
+
+				other.setRemover([&](const Lists::Id& id, const Lists::Type &obj) {});
+				other = saved;
+				other.defaultRemover();
+
+				saved.setRemover([&](const Lists::Id& id, const Lists::Type &obj) {});
+			});
 
 			if (m_created && has<void(This*)>("@swap")) self("@swap");
 		};
