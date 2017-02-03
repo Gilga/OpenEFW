@@ -74,6 +74,8 @@ namespace OpenEFW
 		#define CompID(x)  "[" + to_str() + "::" + x + "] "
 		#define CompType CompID(id) + TypeInfo::Get<Value<T>>::to_str()
 
+		template<typename T> using type_convert = typename Delegate<>::Get<T>::type;
+
 		//template<typename T> Key key(ParamID id) { return Key::create<T>(id); }
 
 		template<typename T>
@@ -87,7 +89,7 @@ namespace OpenEFW
 			c.setParent(*this);
 		}
 
-		template<typename _T, typename ...Args, typename T = Delegate<>::convert<_T>::type>
+		template<typename _T, typename ...Args, typename T = type_convert<_T>>
 		T& add(Lists &lists, Key k, Args... args)
 		{
 			if (!lists.add(k, new Value<T>(forward<Args>(args)...))) { auto& id = k.to_str(); ThrowNotAdd(CompType); }
@@ -96,7 +98,7 @@ namespace OpenEFW
 			return value;
 		}
 
-		template<typename _T, typename T = Delegate<>::convert<_T>::type>
+		template<typename _T, typename T = type_convert<_T>>
 		T& get(Lists &lists, Key k)
 		{
 			auto& id = k.to_str();
@@ -105,7 +107,7 @@ namespace OpenEFW
 			return **reconvert<T>(id, base);
 		};
 
-		template<typename _T, typename T = Value<Delegate<>::convert<_T>::type>>
+		template<typename _T, typename T = Value<type_convert<_T>>>
 		T* reconvert(ParamID id, BaseValue* base)
 		{
 			if (!base) ThrowIsNull(CompType);
@@ -126,7 +128,7 @@ namespace OpenEFW
 		{
 			Lists *l = NULL;
 
-			using Type = Delegate<>::convert<T>::type;
+			using Type = type_convert<T>;
 
 			auto v = is_constructible<Type>::value;
 			auto c = is_same<This, typename decay<Type>::type>::value;
@@ -215,7 +217,7 @@ namespace OpenEFW
 		template<typename T>
 		Key key(ParamID id)
 		{
-			return Key::create<Delegate<>::convert<T>::type>(id);
+			return Key::create<type_convert<T>>(id);
 		}
 
 		template<typename T>
@@ -250,13 +252,13 @@ namespace OpenEFW
 			return r;
 		}
 
-		template<typename _T, typename ...Args, typename T = Delegate<>::convert<_T>::type>
+		template<typename _T, typename ...Args, typename T = type_convert<_T>>
 		T& add(ParamID id, Args... args)
 		{
 			return add<T>(list<T>(), key<T>(id), forward<Args>(args)...);
 		}
 
-		template<typename _T, typename T = Delegate<>::convert<_T>::type>
+		template<typename _T, typename T = type_convert<_T>>
 		T& get(ParamID id)
 		{
 			return get<T>(list<T>(), key<T>(id));
@@ -290,6 +292,17 @@ namespace OpenEFW
 			// / && !l.replace(old_id, new Value<T>(value))) CompNoRpl(TypeInfo::Get<Value<T>>::str());  // 
 			return rpl;
 		}
+
+		template<typename T>
+		string& description(ParamID id)
+		{
+			auto& l = list<T>();
+			auto& k = key<T>(id);
+			if (!l.has(k)) ThrowNotExist(CompType);
+			auto base = l.get(k);
+			if (!base) ThrowIsNull(CompType);
+			return base->description();
+		};
 
 		// ------------------------------
 

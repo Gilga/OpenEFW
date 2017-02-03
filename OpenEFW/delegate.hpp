@@ -42,6 +42,7 @@
 #include "type_utility.hpp"
 #include "type_memory.hpp"
 
+#include "tags.hpp"
 #include "exception.hpp"
 #include "hash_map.hpp"
 
@@ -65,48 +66,58 @@ namespace OpenEFW
 
 		TypeInfo getTypeInfo() { return m_typeinfo; };
 
-		template<typename T> Delegate<T>* get()
+		template<typename T>
+		Delegate<T>* get()
 		{
 			if (m_typeinfo.hasType<T>())  return static_cast<Delegate<T>*>(this);
 			return nullptr;
 		}
 
-		template <typename ...T> class convert_process;
 
-		template <typename C, typename R, typename... A> struct convert_process<R(C::*)(A...) const>
-		{
-			using classtype = C;
-			using functype = R(C::*)(A...) const;
-			using type = Delegate<R(A...)>;
-		};
+		template<typename T> static auto get(T && f) { return Get<T>::type(f); };
 
-		template <typename T> struct convert_process<T>
-		{
-			using classtype = void;
-			using functype = void;
-			using type = typename conditional<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>, T>::type;
-		};
+		template <typename ...T> class extract;
 
-		template<bool _Test, class _Tx = void, class _Ty = void> struct can_convert {};
-		template<class _Tx, class _Ty>	struct can_convert<false, _Tx, _Ty> : public convert_process<_Ty> {};
-		template<class _Tx, class _Ty>	struct can_convert<true, _Tx, _Ty> : public convert_process<decltype(&_Tx::operator())> {};
+		template <typename C, typename R, typename... A> struct extract<R(C::*)(A...) const> { using type = Delegate<R(A...)>; };
+		template <typename T> struct extract<T> : public conditional<is_convertible<Delegate<>, Delegate<T>>::value, Delegate<T>, T> {};
 
-		template <typename T> struct convert {
-			using type = typename can_convert<(!is_constructible<T>::value && !is_array<T>::value && !is_function<T>::value && !is_bind_expression<T>::value), T, T>::type;
+		template<bool _Test, class _Tx = void, class _Ty = void> struct check {};
+		template<class _Tx, class _Ty>	struct check<false, _Tx, _Ty> : public extract<_Ty> {};
+		template<class _Tx, class _Ty>	struct check<true, _Tx, _Ty> : public extract<decltype(&_Tx::operator())> {};
+
+		template <typename T> struct Get {
+			using type = typename check<(!is_constructible<T>::value && !is_array<T>::value && !is_function<T>::value && !is_bind_expression<T>::value), T, T>::type;
 		};
 	};
 
 	template<typename R, typename ...A>
 	class Delegate<R(A...)> : public Delegate<>
 	{
+	public:
+		using ReturnType = R;
+		using Type = R(A...);
+		using This = Delegate<Type>;
+		using Super = Delegate<>;
+
+		using StubType = R(*)(void*, A...);
+		using FuncType = R(*)(A...);
+		using DelType = void(*)(void*);
+
 	protected:
-		using stub_ptr_type = R(*)(void*, A...);
-		using func_ptr_type = R(*)(A...);
+		friend struct hash<Delegate>;
+
+		void* m_object_ptr = nullptr;
+		FuncType m_func_ptr = nullptr;
+		StubType m_stub_ptr = nullptr;
+		DelType m_deleter = nullptr;
+
+		shared_ptr<void> m_store;
+		size_t m_store_size = 0;
 
 	private:
 		void default() { m_typeinfo.set<R(A...)>(); };
 
-		Delegate(void* const o, stub_ptr_type const m) _NOEXCEPT :
+		Delegate(void* const o, StubType const m) _NOEXCEPT :
 		m_object_ptr(o), m_stub_ptr(m) { default(); }
 
 		void copy(const Delegate& other)
@@ -119,12 +130,68 @@ namespace OpenEFW
 			m_stub_ptr = other.m_stub_ptr;
 		}
 
-	public:
-		using ReturnType = R;
-		using Type = R(A...);
-		using This = Delegate<Type>;
-		using Super = Delegate<>;
+		template <class T>
+		static void functor_deleter(void* const p)
+		{
+			static_cast<T*>(p)->~T();
 
+			operator delete(p);
+		}
+
+		template <class T>
+		static void deleter_stub(void* const p)
+		{
+			static_cast<T*>(p)->~T();
+		}
+
+		template <R(*function_ptr)(A...)>
+		static R function_stub(void* const, A... args)
+		{
+			return function_ptr(forward<A>(args)...);
+		}
+
+		template <class C, R(C::*method_ptr)(A...)>
+		static R method_stub(void* const object_ptr, A... args)
+		{
+			return (static_cast<C*>(object_ptr)->*method_ptr)(
+				forward<A>(args)...);
+		}
+
+		template <class C, R(C::*method_ptr)(A...) const>
+		static R const_method_stub(void* const object_ptr, A... args)
+		{
+			return (static_cast<C const*>(object_ptr)->*method_ptr)(
+				forward<A>(args)...);
+		}
+
+		template <typename>
+		struct is_member_pair : false_type { };
+
+		template <class C>
+		struct is_member_pair<pair<C* const, R(C::* const)(A...)> > : true_type {};
+
+		template <typename>
+		struct is_const_member_pair : false_type { };
+
+		template <class C>
+		struct is_const_member_pair<pair<C const* const, R(C::* const)(A...) const> > : true_type {};
+
+		template <typename T>
+		static enable_if_t<!(is_member_pair<T>::value || is_const_member_pair<T>::value), R>
+			functor_stub(void* const object_ptr, A... args)
+		{
+			return (*static_cast<T*>(object_ptr))(forward<A>(args)...);
+		}
+
+		template <typename T>
+		static enable_if_t<is_member_pair<T>::value || is_const_member_pair<T>::value, R>
+			functor_stub(void* const object_ptr, A... args)
+		{
+			return (static_cast<T*>(object_ptr)->first->*
+				static_cast<T*>(object_ptr)->second)(forward<A>(args)...);
+		}
+
+	public:
 		Delegate() { default(); } // = default;
 
 		Delegate(This const& other) { default(); copy(other); } //= default;
@@ -148,38 +215,43 @@ namespace OpenEFW
 		}
 
 		template <class C>
-		Delegate(C* const object_ptr, R(C::* const method_ptr)(A...) const) {
+		Delegate(C* const object_ptr, R(C::* const method_ptr)(A...) const)
+		{
 			default();
 			*this = from(object_ptr, method_ptr);
 		}
 
 		template <class C>
-		Delegate(C& object, R(C::* const method_ptr)(A...)) {
+		Delegate(C& object, R(C::* const method_ptr)(A...))
+		{
 			default();
 			*this = from(object, method_ptr);
 		}
 
 		template <class C>
-		Delegate(C const& object, R(C::* const method_ptr)(A...) const) {
+		Delegate(C const& object, R(C::* const method_ptr)(A...) const)
+		{
 			default();
 			*this = from(object, method_ptr);
 		}
 		
 		template <typename T, typename = typename enable_if<!is_same<Delegate, typename decay<T>::type>::value>::type>
-		Delegate(T&& f) :
-		m_store(operator new(sizeof(typename decay<T>::type)),
+		Delegate(T&& f)
+		: m_store(operator new(sizeof(typename decay<T>::type)),
 		functor_deleter<typename decay<T>::type>),
 		m_store_size(sizeof(typename decay<T>::type))
 		{
 			using functor_type = typename decay<T>::type;
 			default();
-
 			new (m_store.get()) functor_type(forward<T>(f));
-
 			m_object_ptr = m_store.get();
 			m_stub_ptr = functor_stub<functor_type>;
 			m_deleter = deleter_stub<functor_type>;
 		}
+		//{
+		//	default();
+		//	*this = f;
+		//}
 
 		Delegate& operator=(Delegate const& other) { copy(other); return *this; }; //= default;
 
@@ -308,140 +380,111 @@ namespace OpenEFW
 			return m_stub_ptr(m_object_ptr, forward<A>(args)...);
 		};
 
-		stub_ptr_type target() const { return m_stub_ptr; };
+		StubType target() const { return m_stub_ptr; };
 
-		template<class C> func_ptr_type c_target(bool reset = false) { return callback<C>(this, reset); };
+		template<class C> auto c_target()
+		{
+			return Delegate<C, Type>::callback(this);
+		}
+
+		protected:
+			template<class C> struct Intern
+			{
+				static auto& storrage()
+				{
+					static This f;
+					return f;
+				};
+
+				static auto c_function()
+				{
+					return [](A... args) { return storrage()(forward<A>(args)...); };
+				}
+
+				static auto callback(This* target = nullptr, bool reset = false)
+				{
+					auto& f = storrage();
+
+					if (target) {
+						if (!reset && f)
+							throw Exception<Tags<C,This>>("static object already exist", __FILE__X, __LINE__);
+						else if (reset || !f) f = *target;
+					}
+					else if (reset && f) f.reset();
+
+					return c_function();
+				};
+			};
+
+		//template<class C> FuncType c_target(bool reset = false) { return callback<C>(this, reset); };
 
 		// should be used only once per class! you can reset the entry of instance.
-		template<class C> static func_ptr_type callback(This* target = nullptr, bool reset = false) {
-			static This storrage;
+		//template<class C> static FuncType callback(This* target = nullptr, bool reset = false) {
+		//	static This storrage;
 
-			if (target && storrage && !reset) {
-				throw Exception<This>("instance of c target already exist", __FILE__X, __LINE__);
-			}
-			else if (target && (reset || !storrage)) storrage = *target;
-			else if (reset && !target && storrage) storrage.reset();
+		//	if (target && storrage && !reset) {
+		//		throw Exception<This>("instance of c target already exist", __FILE__X, __LINE__);
+		//	}
+		//	else if (target && (reset || !storrage)) storrage = *target;
+		//	else if (reset && !target && storrage) storrage.reset();
 
-			return func_ptr_type([](A... args){ return (storrage)(forward<A>(args)...); });
-		};
-
-	protected:
-		func_ptr_type m_func_ptr = nullptr;
-
-	private:
-		friend struct hash<Delegate>;
-
-		using deleter_type = void(*)(void*);
-
-		void* m_object_ptr = nullptr;
-		stub_ptr_type m_stub_ptr = nullptr;
-
-		deleter_type m_deleter = nullptr;
-
-		shared_ptr<void> m_store;
-		size_t m_store_size = 0;
-
-		template <class T>
-		static void functor_deleter(void* const p)
-		{
-			static_cast<T*>(p)->~T();
-
-			operator delete(p);
-		}
-
-		template <class T>
-		static void deleter_stub(void* const p)
-		{
-			static_cast<T*>(p)->~T();
-		}
-
-		template <R(*function_ptr)(A...)>
-		static R function_stub(void* const, A... args)
-		{
-			return function_ptr(forward<A>(args)...);
-		}
-
-		template <class C, R(C::*method_ptr)(A...)>
-		static R method_stub(void* const object_ptr, A... args)
-		{
-			return (static_cast<C*>(object_ptr)->*method_ptr)(
-				forward<A>(args)...);
-		}
-
-		template <class C, R(C::*method_ptr)(A...) const>
-		static R const_method_stub(void* const object_ptr, A... args)
-		{
-			return (static_cast<C const*>(object_ptr)->*method_ptr)(
-				forward<A>(args)...);
-		}
-
-		template <typename>
-		struct is_member_pair : false_type { };
-
-		template <class C>
-		struct is_member_pair<pair<C* const,R(C::* const)(A...)> > : true_type {};
-
-		template <typename>
-		struct is_const_member_pair : false_type { };
-
-		template <class C>
-		struct is_const_member_pair<pair<C const* const, R(C::* const)(A...) const> > : true_type {};
-
-		template <typename T>
-		static enable_if_t<!(is_member_pair<T>::value || is_const_member_pair<T>::value), R>
-		functor_stub(void* const object_ptr, A... args)
-		{
-			return (*static_cast<T*>(object_ptr))(forward<A>(args)...);
-		}
-
-		template <typename T>
-		static enable_if_t<is_member_pair<T>::value || is_const_member_pair<T>::value, R>
-		functor_stub(void* const object_ptr, A... args)
-		{
-			return (static_cast<T*>(object_ptr)->first->*
-				static_cast<T*>(object_ptr)->second)(forward<A>(args)...);
-		}
+		//	return FuncType([](A... args){ return (storrage)(forward<A>(args)...); });
+		//};
 	};
 
 	template<class C, typename T>
-	class Delegate<C, T> : public Delegate<T>{
+	class Delegate<C, T> : public Delegate<T>
+	{
 	protected:
 		using This = Delegate<C, T>;
 		using Super = Delegate<T>;
 		using Base = Delegate<>;
 
-		using Identifer = string;
-		using Element = Delegate<T>;
-		using Map = hash_map<Identifer, Element>;
+		//using Identifer = string;
+		//using Element = Delegate<T>;
+		//using Map = hash_map<Identifer, Element>;
 
-		static Map& map() { static Map map; return map; };
+		//static Map& map() { static Map map; return map; };
 
 	public:
-		template<typename F> static void set(F ptr) { set(ptr, map().size()); };
 
-		template<typename F> static void set(F ptr, size_t index) {
-			set(to_string(index), ptr);
-			//map()[to_string(index)] = ptr;
+		auto c_target()
+		{
+			return Intern<C>::callback(this);
+		}
+
+		static auto callback(Super* target = nullptr, bool reset = false)
+		{
+			return Intern<C>::callback(target, reset);
 		};
 
-		template<typename F> static void set(Identifer id, F ptr) {
-			auto &it = map().find(id);
-			if (it != map().end()) it->second = ptr;
-			else map().insert(pair<Identifer, Element>(id, ptr));
-			//map()[id] = ptr;
-		};
+		//template<typename F> static void set(F ptr) { set(ptr, map().size()); };
 
-		static Element& get(size_t index = 0) { return get(to_string(index)); };
+		//template<typename F> static void set(F ptr, size_t index)
+		//{
+		//	set(to_string(index), ptr);
+		//	//map()[to_string(index)] = ptr;
+		//};
 
-		static Element& get(Identifer id) {
-			auto &it = map().find(id);
-			if (it != map().end()) return it->second;
-			static Element default;
-			return default;
-		};
+		//template<typename F> static void set(Identifer id, F ptr)
+		//{
+		//	auto &it = map().find(id);
+		//	if (it != map().end()) it->second = ptr;
+		//	else map().insert(pair<Identifer, Element>(id, ptr));
+		//	//map()[id] = ptr;
+		//};
 
-		static decltype(m_stub_ptr) target(Super& ref) { return ref.target(); };
-		static decltype(m_func_ptr) c_target(Super& ref) { return ref.c_target<This>(); };
+		//static Element& get(size_t index = 0) { return get(to_string(index)); };
+
+		//static Element& get(Identifer id) {
+		//	auto &it = map().find(id);
+		//	if (it != map().end()) return it->second;
+		//	static Element default;
+		//	return default;
+		//};
+
+		//static decltype(m_stub_ptr) target(Super& ref) { return ref.target(); };
+		//static decltype(m_func_ptr) c_target(Super& ref) { return ref.c_target<This>(); };
 	};
 };
 

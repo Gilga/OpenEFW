@@ -33,14 +33,16 @@
 
 #include "UnknownClass.hpp"
 
-namespace OpenEFW {
-
+namespace OpenEFW
+{
 	template<typename ...A> class Container;
 
-	template<> class Container<> : public UnknownClass {
-
+	template<> class Container<> : public UnknownClass
+	{
 		Container(Container const&) = delete;
 		Container& operator=(Container const&) = delete;
+
+		string m_description = "";
 
 	protected:
 		Container() {}
@@ -53,9 +55,12 @@ namespace OpenEFW {
 			if (m_typeinfo.hash_code() != TypeInfo::Get<C>::hash_code()) return nullptr;
 			return static_cast<C*>(this);
 		}
+
+		string& description() { return m_description; };
 	};
 
-	template<typename T> class Container<T> : public Container<>{
+	template<typename T> class Container<T> : public Container<>
+	{
 		SetUnknownClass
 		
 	private:
