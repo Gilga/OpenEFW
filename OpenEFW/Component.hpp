@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Mario Link
+ * Copyright (c) 2017, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -47,11 +47,28 @@ namespace OpenEFW
 	{
 		SetUnknownClass
 
-	protected:
+	public:
 
 		using This = Component;
-		using ParamID = string const&;
+		using IDType = string;
+		using ParamID = IDType const&;
 		using Key = HashKey;
+
+		template<typename T> using Value = Container<T>;
+		using BaseValue = Container<>;
+
+		using Lists = SmartMap<Key, BaseValue, Key>;
+
+		#define CompID(x)  "[" + to_str() + "::" + x + "] "
+		#define CompType CompID(id) + TypeInfo::Get<Value<T>>::to_str()
+
+		template<typename T> using type_convert = typename Delegate<>::Get<T>::type;
+
+	protected:
+
+		Lists m_values;
+		Lists m_functions;
+		Lists m_components;
 
 		Key m_id;
 
@@ -60,22 +77,44 @@ namespace OpenEFW
 
 		void setParent(This& c) { m_parent = &c; };
 
-	public:
-		template<typename T> using Value = Container<T>;
-		using BaseValue = Container<>;
+		template<typename _T, typename T = type_convert<_T>>
+		struct ListEntry
+		{
+			using Type = T;
 
-		using Lists = SmartMap<Key, BaseValue, Key>;
+			This& o;
+			Lists& l;
+			Key k;
 
-	protected:
-		Lists m_values;
-		Lists m_functions;
-		Lists m_components;
+			ListEntry(This* t, ParamID id) : o(*t), l(o.list<T>()), k(o.key<T>(id)) {}
+
+			T* operator*() {
+				if (l.has(k)) return &(**o.restore<T>(k.to_str(), l.get(k)));
+				return nullptr;
+			}
+
+			explicit operator bool() const _NOEXCEPT { return l.has(k); }
+
+			IDType getID() { return k.to_str(); }
+		};
+
+		template<typename T>
+		class ReturnValue
+		{
+			T* value = nullptr;
+
+		public:
+			bool isEmpty() { return (value == nullptr); }
+
+			bool operator==(bool const& b) { return !isEmpty() == b; }
+			bool operator!=(bool const& b) { return !isEmpty() != b; }
+
+			explicit operator bool() { return value != nullptr; }
+
+			T& operator*() { return *value; }
+			T& get() { return *value; }
+		};
 		
-		#define CompID(x)  "[" + to_str() + "::" + x + "] "
-		#define CompType CompID(id) + TypeInfo::Get<Value<T>>::to_str()
-
-		template<typename T> using type_convert = typename Delegate<>::Get<T>::type;
-
 		//template<typename T> Key key(ParamID id) { return Key::create<T>(id); }
 
 		template<typename T>
@@ -90,38 +129,23 @@ namespace OpenEFW
 		}
 
 		template<typename _T, typename ...Args, typename T = type_convert<_T>>
-		T& add(Lists &lists, Key k, Args... args)
+		T& add(ListEntry<_T>& e, Args... args)
 		{
-			if (!lists.add(k, new Value<T>(forward<Args>(args)...))) { auto& id = k.to_str(); ThrowNotAdd(CompType); }
-			auto& value = get<T>(lists, k);
-			update(k.to_str(), value);
+			auto& id = e.getID();
+			if (!e.l.add(e.k, new Value<T>(forward<Args>(args)...))) ThrowNotAdd(CompType);
+			auto& value = **e;
+			update(id, value);
 			return value;
 		}
 
-		template<typename _T, typename T = type_convert<_T>>
-		T& get(Lists &lists, Key k)
-		{
-			auto& id = k.to_str();
-			if (!lists.has(k)) ThrowNotExist(CompType);
-			auto base = lists.get(k);
-			return **reconvert<T>(id, base);
-		};
-
 		template<typename _T, typename T = Value<type_convert<_T>>>
-		T* reconvert(ParamID id, BaseValue* base)
+		T* restore(ParamID id, BaseValue* base)
 		{
 			if (!base) ThrowIsNull(CompType);
-			auto value = base ? base->reconvert<T>() : nullptr; //base->cast<T>()
+			auto value = base ? base->self_restore<T>() : nullptr; //base->cast<T>()
 			if (!value) ThrowNotCast(CompType);
 			return value;
 		}
-
-		template<typename I, typename T>
-		static inline string type_to_str()
-		{
-			static auto str = TypeInfo::Get<I>::to_str() + "::"	+ TypeInfo::Get<T>::to_str();
-			return str;
-		};
 
 		template<typename T>
 		Lists& list()
@@ -235,33 +259,33 @@ namespace OpenEFW
 		template<typename T>
 		bool set(ParamID id, T const& obj)
 		{
-			auto& l = list<T>();
-			auto& k = key<T>(id);
-			auto r = l.has(k);
-			if (r) { update(k.to_str(), obj); get<T>(l, k) = obj; }
+			auto&e = ListEntry<T>(this, id);
+			auto r = bool(e);
+			if (r) { update(e.getID(), obj); (**e) = obj; }
 			return r;
 		}
 
 		template<typename T, typename ...Args>
 		bool add(ParamID id, T const& obj, Args... args)
 		{
-			auto& k = key<T>(id);
-			auto& l = list<T>();
-			auto r = !l.has(k);
-			if (r) add<T>(l, k, forward<Args>(args)...) = obj;
+			auto&e = ListEntry<T>(this, id);
+			auto r = !e;
+			if (r) add<T>(e, forward<Args>(args)...) = obj;
 			return r;
 		}
 
 		template<typename _T, typename ...Args, typename T = type_convert<_T>>
 		T& add(ParamID id, Args... args)
 		{
-			return add<T>(list<T>(), key<T>(id), forward<Args>(args)...);
+			return add<T>(ListEntry<T>(this, id), forward<Args>(args)...);
 		}
 
 		template<typename _T, typename T = type_convert<_T>>
 		T& get(ParamID id)
 		{
-			return get<T>(list<T>(), key<T>(id));
+			auto r = *ListEntry<T>(this, id);
+			if (!r) ThrowNotExist(CompType);
+			return *r;
 		}
 
 		template<typename T>
@@ -275,13 +299,12 @@ namespace OpenEFW
 		{
 			bool rpl = (old_id != id);
 
-			auto& l = list<T>();
-			auto& k = key<T>(id);
-			auto& k_ = key<T>(old_id);
-			auto& value = l.has(k) ? get<T>(l, k) : add<T>(l, k);
+			auto& e = ListEntry<T>(this, id);
+			auto& value = e ? **e : add<T>(e);
 
 			if (rpl) {
-				auto &old = get<T>(l, k_);
+				e.k = key<T>(old_id);
+				auto &old = **e;
 				old = value;
 				update(old_id, old);
 			}
@@ -307,27 +330,86 @@ namespace OpenEFW
 		// ------------------------------
 
 		// call with "this" parameter 
-		template<typename R = void, typename ...A>
+		template<typename R = void, typename ...A, typename T = R(This*, A...)>
 		R self(ParamID id, A... args)
-		{ return get<R(This*, A...)>(id)(this, forward<A>(args)...); };
+		{
+			auto r = *ListEntry<T>(this, id);
+			if (!r) ThrowNotExist(CompType);
+			return (*r)(this, forward<A>(args)...);
+		};
+
+		// call in silent mode: does not break if function was not found.
+		// call without "this" parameter 
+		template<typename R = void, typename ...A, typename T = R(This*, A...)>
+		ReturnValue<typename ListEntry<T>::Type>
+		self_silent(ParamID id, A... args)
+		{
+			auto r = *ListEntry<T>(this, id);
+			if (r) return { &(*r)(this, forward<A>(args)...) };
+			return {};
+		};
 
 		// call without "this" parameter 
-		template<typename R = void, typename ...A>
+		template<typename R = void, typename ...A, typename T = R(A...)>
 		R call(ParamID id, A... args)
-		{ return get<R(A...)>(id)(forward<A>(args)...); };
+		{
+			auto r = *ListEntry<T>(this, id);
+			if(!r) ThrowNotExist(CompType);
+			return (*r)(forward<A>(args)...);
+		};
+
+		// call in silent mode: does not break if function was not found.
+		// call without "this" parameter 
+		template<typename R = void, typename ...A, typename T = R(A...)>
+		ReturnValue<typename ListEntry<R(A...)>::Type>
+		call_silent(ParamID id, A... args)
+		{
+			auto r = *ListEntry<T>(this, id);
+			if(r) return { &(*r)(forward<A>(args)...) };
+			return {};
+		};
+
+		template<typename R = void, typename ...A>
+		R invoke_self(ParamID comp_id, ParamID id, A... args)
+		{
+			auto r = *ListEntry<This>(this, comp_id);
+			if (!r) ThrowNotExist(CompType);
+			return (*r).self<R>(id, forward<A>(args)...);
+		}
+
+		// call in silent mode: does not break if function was not found.
+		template<typename R = void, typename ...A>
+		ReturnValue<This> invoke_self_silent(ParamID comp_id, ParamID id, A... args)
+		{
+			auto r = *ListEntry<This>(this, comp_id);
+			if (r) return{ &(*r).self_silent<R>(id, forward<A>(args)...) };
+			return{};
+		}
 
 		template<typename R = void, typename ...A>
 		R invoke(ParamID comp_id, ParamID id, A... args)
-		{ return get<This>(comp_id).call<R>(id, forward<A>(args)...); }
+		{
+			auto r = *ListEntry<This>(this, comp_id);
+			if (!r) ThrowNotExist(CompType);
+			return (*r).call<R>(id, forward<A>(args)...);
+		}
+
+		// call in silent mode: does not break if function was not found.
+		template<typename R = void, typename ...A>
+		ReturnValue<This> invoke_silent(ParamID comp_id, ParamID id, A... args)
+		{
+			auto r = *ListEntry<This>(this, comp_id);
+			if (r) return { &(*r).call_silent<R>(id, forward<A>(args)...) };
+			return {};
+		}
 
 		// invoke a function per component with results
 		template<typename R, typename ...A>
 		void invoke(std::vector<R>& results, ParamID id, A... args)
 		{
-			using T = R(A...);
 			for (auto &e : m_components.source()) {
-				auto &c = reconvert<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
-				if (c.has<T>()) results.push_back(c.call<T>(id, forward<A>(args)...));
+				auto &c = restore<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				results.push_back(c.call<R>(id, forward<A>(args)...));
 			}
 		}
 
@@ -335,10 +417,29 @@ namespace OpenEFW
 		template<typename R = void, typename ...A>
 		void invoke(ParamID id, A... args)
 		{
-			using T = R(A...);
 			for (auto &e : m_components.source()) {
-				auto &c = reconvert<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
-				if (c.has<T>()) c.callT>(id, forward<A>(args)...);
+				auto &c = restore<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				c.call<R>(id, forward<A>(args)...);
+			}
+		}
+
+		// invoke a function per component with results
+		template<typename R, typename ...A>
+		void invoke_self(std::vector<R>& results, ParamID id, A... args)
+		{
+			for (auto &e : m_components.source()) {
+				auto &c = restore<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				results.push_back(c.self<R>(id, forward<A>(args)...));
+			}
+		}
+
+		// invoke a function per component without results
+		template<typename R = void, typename ...A>
+		void invoke_self(ParamID id, A... args)
+		{
+			for (auto &e : m_components.source()) {
+				auto &c = restore<This>("component_function('" + id + "')", e.second.get())->value; // could fail if not exists
+				c.self<R>(id, forward<A>(args)...);
 			}
 		}
 
@@ -416,9 +517,11 @@ namespace OpenEFW
 
 			useOnLists(other, [&](Lists& that, Lists& other)
 			{
-				that.clear();
-				//other.loop([&](const Lists::Id& id, const Lists::Type &obj) { that.add(id, reconvert<T>(obj)); return false; });
-				for (auto &e : other.source()) that.add(e.first, e.second.get());
+				that = other;
+				//other.loop([&](const Lists::Id& id, const Lists::Type &obj) { that.add(id, restore<T>(obj)); return false; });
+				//that.clear();
+				//for (auto &e : other.source()) that.add(e.first, e.second.get());
+				
 			});
 
 			if (m_created && has<void(This*)>("@copy")) self("@copy");
@@ -428,7 +531,6 @@ namespace OpenEFW
 		{
 			useOnLists(other, [&](Lists& that, Lists& other)
 			{
-				that.clear();
 				that = other;
 				other.setRemover([&](const Lists::Id& id, const Lists::Type &obj) {}); // this object does not own objects anymore => no deletion
 				other.clear();
