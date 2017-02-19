@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2017, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*
-	This class is an own invention of the delegate class (replacement for std::function)
+	This class is custom invention of a replacement for std::function.
+	Inspiration taken from different sources:
 	http://codereview.stackexchange.com/questions/14730/impossibly-fast-delegate-in-c11
 	http://www.codeproject.com/Articles/11015/The-Impossibly-Fast-C-Delegates
 	http://www.codeproject.com/Articles/7150/Member-Function-Pointers-and-the-Fastest-Possible
@@ -153,25 +154,23 @@ namespace OpenEFW
 		template <class C, R(C::*method_ptr)(A...)>
 		static R method_stub(void* const object_ptr, A... args)
 		{
-			return (static_cast<C*>(object_ptr)->*method_ptr)(
-				forward<A>(args)...);
+			return (static_cast<C*>(object_ptr)->*method_ptr)(forward<A>(args)...);
 		}
 
 		template <class C, R(C::*method_ptr)(A...) const>
 		static R const_method_stub(void* const object_ptr, A... args)
 		{
-			return (static_cast<C const*>(object_ptr)->*method_ptr)(
-				forward<A>(args)...);
+			return (static_cast<C const*>(object_ptr)->*method_ptr)(forward<A>(args)...);
 		}
 
 		template <typename>
-		struct is_member_pair : false_type { };
+		struct is_member_pair : false_type {};
 
 		template <class C>
 		struct is_member_pair<pair<C* const, R(C::* const)(A...)> > : true_type {};
 
 		template <typename>
-		struct is_const_member_pair : false_type { };
+		struct is_const_member_pair : false_type {};
 
 		template <class C>
 		struct is_const_member_pair<pair<C const* const, R(C::* const)(A...) const> > : true_type {};
@@ -209,7 +208,8 @@ namespace OpenEFW
 		explicit Delegate(C const& o) _NOEXCEPT : m_object_ptr(const_cast<C*>(&o)) { default(); }
 
 		template <class C>
-		Delegate(C* const object_ptr, R(C::* const method_ptr)(A...)) {
+		Delegate(C* const object_ptr, R(C::* const method_ptr)(A...))
+		{
 			default();
 			*this = from(object_ptr, method_ptr);
 		}
@@ -256,12 +256,14 @@ namespace OpenEFW
 		Delegate& operator=(Delegate const& other) { copy(other); return *this; }; //= default;
 
 		template <class C>
-		Delegate& operator=(R(C::* const rhs)(A...)){
+		Delegate& operator=(R(C::* const rhs)(A...))
+		{
 			return *this = from(static_cast<C*>(m_object_ptr), rhs);
 		}
 
 		template <class C>
-		Delegate& operator=(R(C::* const rhs)(A...) const) {
+		Delegate& operator=(R(C::* const rhs)(A...) const)
+		{
 			return *this = from(static_cast<C const*>(m_object_ptr), rhs);
 		}
 
@@ -291,27 +293,32 @@ namespace OpenEFW
 		}
 
 		template <R(*const function_ptr)(A...)>
-		static Delegate from() _NOEXCEPT{
+		static Delegate from() _NOEXCEPT
+		{
 			return{ nullptr, function_stub<function_ptr> };
 		}
 
 		template <class C, R(C::* const method_ptr)(A...)>
-		static Delegate from(C* const object_ptr) _NOEXCEPT{
+		static Delegate from(C* const object_ptr) _NOEXCEPT
+		{
 			return{ object_ptr, method_stub<C, method_ptr> };
 		}
 
 		template <class C, R(C::* const method_ptr)(A...) const>
-		static Delegate from(C const* const object_ptr) _NOEXCEPT{
+		static Delegate from(C const* const object_ptr) _NOEXCEPT
+		{
 			return{ const_cast<C*>(object_ptr), const_method_stub<C, method_ptr> };
 		}
 
 		template <class C, R(C::* const method_ptr)(A...)>
-		static Delegate from(C& object) _NOEXCEPT{
+		static Delegate from(C& object) _NOEXCEPT
+		{
 			return{ &object, method_stub<C, method_ptr> };
 		}
 
 		template <class C, R(C::* const method_ptr)(A...) const>
-		static Delegate from(C const& object) _NOEXCEPT{
+		static Delegate from(C const& object) _NOEXCEPT
+		{
 			return{ const_cast<C*>(&object), const_method_stub<C, method_ptr> };
 		}
 
@@ -327,38 +334,44 @@ namespace OpenEFW
 		using const_member_pair = pair<C const* const, R(C::* const)(A...) const>;
 
 		template <class C>
-		static Delegate from(C* const object_ptr, R(C::* const method_ptr)(A...)) {
+		static Delegate from(C* const object_ptr, R(C::* const method_ptr)(A...))
+		{
 			return member_pair<C>(object_ptr, method_ptr);
 		}
 
 		template <class C>
-		static Delegate from(C const* const object_ptr, R(C::* const method_ptr)(A...) const) {
+		static Delegate from(C const* const object_ptr, R(C::* const method_ptr)(A...) const)
+		{
 			return const_member_pair<C>(object_ptr, method_ptr);
 		}
 
 		template <class C>
-		static Delegate from(C& object, R(C::* const method_ptr)(A...)) {
+		static Delegate from(C& object, R(C::* const method_ptr)(A...))
+		{
 			return member_pair<C>(&object, method_ptr);
 		}
 
 		template <class C>
-		static Delegate from(C const& object, R(C::* const method_ptr)(A...) const) {
+		static Delegate from(C const& object, R(C::* const method_ptr)(A...) const)
+		{
 			return const_member_pair<C>(&object, method_ptr);
 		}
 
 		void reset() { if (!m_stub_ptr) return; m_stub_ptr = nullptr; m_store.reset(); }
 
-		void reset_stub() _NOEXCEPT{ m_stub_ptr = nullptr; }
+		void reset_stub() _NOEXCEPT { m_stub_ptr = nullptr; }
 
-		void swap(Delegate& other) _NOEXCEPT{ swap(*this, other); }
+		void swap(Delegate& other) _NOEXCEPT { swap(*this, other); }
 
-		bool operator==(Delegate const& rhs) const _NOEXCEPT{
+		bool operator==(Delegate const& rhs) const _NOEXCEPT
+		{
 			return (m_object_ptr == rhs.m_object_ptr) && (m_stub_ptr == rhs.m_stub_ptr);
 		}
 
-		bool operator!=(Delegate const& rhs) const _NOEXCEPT{ return !operator==(rhs); }
+		bool operator!=(Delegate const& rhs) const _NOEXCEPT { return !operator==(rhs); }
 
-		bool operator<(Delegate const& rhs) const _NOEXCEPT{
+		bool operator<(Delegate const& rhs) const _NOEXCEPT
+		{
 			return (m_object_ptr < rhs.m_object_ptr) ||
 			((m_object_ptr == rhs.m_object_ptr) && (m_stub_ptr < rhs.m_stub_ptr));
 		}
@@ -368,23 +381,23 @@ namespace OpenEFW
 
 		explicit operator bool() const _NOEXCEPT { return m_stub_ptr ? true : false; }
 
-		R invoke(A... args) const {
-			//assert(m_stub_ptr);
+		R invoke(A... args) const
+		{
 			if (!m_stub_ptr) throw Exception<This>("bad function call", __FILE__X, __LINE__);
 			return m_stub_ptr(m_object_ptr, forward<A>(args)...);
 		};
 
-		R operator()(A... args) const {
-			//assert(m_stub_ptr);
+		R operator()(A... args) const
+		{
 			if (!m_stub_ptr) throw Exception<This>("bad function call", __FILE__X, __LINE__);
 			return m_stub_ptr(m_object_ptr, forward<A>(args)...);
 		};
 
 		StubType target() const { return m_stub_ptr; };
 
-		template<class C> auto c_target()
+		template<class C> auto c_target(bool reset = false)
 		{
-			return Delegate<C, Type>::callback(this);
+			return Intern<C>::callback(this, reset);
 		}
 
 		protected:
@@ -396,40 +409,20 @@ namespace OpenEFW
 					return f;
 				};
 
-				static auto c_function()
-				{
-					return [](A... args) { return storrage()(forward<A>(args)...); };
-				}
-
-				static auto callback(This* target = nullptr, bool reset = false)
+				static FuncType callback(This* target = nullptr, bool reset = false)
 				{
 					auto& f = storrage();
 
 					if (target) {
 						if (!reset && f)
-							throw Exception<Tags<C,This>>("static object already exist", __FILE__X, __LINE__);
+							throw Exception<Delegate<C, Type>>("static object already exist", __FILE__X, __LINE__);
 						else if (reset || !f) f = *target;
 					}
 					else if (reset && f) f.reset();
 
-					return c_function();
+					return [](A... args) { return storrage()(forward<A>(args)...); };
 				};
 			};
-
-		//template<class C> FuncType c_target(bool reset = false) { return callback<C>(this, reset); };
-
-		// should be used only once per class! you can reset the entry of instance.
-		//template<class C> static FuncType callback(This* target = nullptr, bool reset = false) {
-		//	static This storrage;
-
-		//	if (target && storrage && !reset) {
-		//		throw Exception<This>("instance of c target already exist", __FILE__X, __LINE__);
-		//	}
-		//	else if (target && (reset || !storrage)) storrage = *target;
-		//	else if (reset && !target && storrage) storrage.reset();
-
-		//	return FuncType([](A... args){ return (storrage)(forward<A>(args)...); });
-		//};
 	};
 
 	template<class C, typename T>
@@ -440,51 +433,14 @@ namespace OpenEFW
 		using Super = Delegate<T>;
 		using Base = Delegate<>;
 
-		//using Identifer = string;
-		//using Element = Delegate<T>;
-		//using Map = hash_map<Identifer, Element>;
-
-		//static Map& map() { static Map map; return map; };
-
 	public:
 
-		auto c_target()
-		{
-			return Intern<C>::callback(this);
-		}
+		auto c_target() { return Intern<C>::callback(this); }
 
 		static auto callback(Super* target = nullptr, bool reset = false)
 		{
 			return Intern<C>::callback(target, reset);
 		};
-
-		//template<typename F> static void set(F ptr) { set(ptr, map().size()); };
-
-		//template<typename F> static void set(F ptr, size_t index)
-		//{
-		//	set(to_string(index), ptr);
-		//	//map()[to_string(index)] = ptr;
-		//};
-
-		//template<typename F> static void set(Identifer id, F ptr)
-		//{
-		//	auto &it = map().find(id);
-		//	if (it != map().end()) it->second = ptr;
-		//	else map().insert(pair<Identifer, Element>(id, ptr));
-		//	//map()[id] = ptr;
-		//};
-
-		//static Element& get(size_t index = 0) { return get(to_string(index)); };
-
-		//static Element& get(Identifer id) {
-		//	auto &it = map().find(id);
-		//	if (it != map().end()) return it->second;
-		//	static Element default;
-		//	return default;
-		//};
-
-		//static decltype(m_stub_ptr) target(Super& ref) { return ref.target(); };
-		//static decltype(m_func_ptr) c_target(Super& ref) { return ref.c_target<This>(); };
 	};
 };
 
@@ -493,7 +449,8 @@ namespace std
 	template <typename R, typename ...A>
 	struct hash<::OpenEFW::Delegate<R(A...)> >
 	{
-		size_t operator()(::OpenEFW::Delegate<R(A...)> const& d) const _NOEXCEPT {
+		size_t operator()(::OpenEFW::Delegate<R(A...)> const& d) const _NOEXCEPT
+		{
 			auto const seed(hash<void*>()(d.m_object_ptr));
 			return hash<typename ::OpenEFW::Delegate<R(A...)>::Type>()(d.m_stub_ptr) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 		}
