@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Mario Link
+ * Copyright (c) 2017, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -32,19 +32,23 @@
 #define __OPENEFW_UNKNOWNCLASS_HPP__
 
 #ifndef SetUnknownClass
-#define SetUnknownClass private: virtual void set() { _unknownClass<RemovePointer(this)>() = this; };
+#define SetUnknownClass private: \
+virtual void self_update() { _self_update(this); }; \
+virtual void self_save() { _self_save(this); };
 #endif
 
-#include "exception.hpp"
+#include "assert.h"
+#include "typeinfo.hpp"
 #include "type_thread.hpp"
+#include "type_traits.hpp"
 
 namespace OpenEFW
 {
 	/*
 	 *	This class retuns a derivated class without casting
 	 */
-	class UnknownClass {
-
+	class UnknownClass
+	{
 		UnknownClass(UnknownClass const&) = delete;
 		UnknownClass& operator=(UnknownClass const&) = delete;
 
@@ -53,46 +57,61 @@ namespace OpenEFW
 		// for thread safety
 		static mutex& _mutex(){ static mutex m; return m; };
 
+		// saves and returns the current object
+		template<typename T>
+		static enable_if_t<is_base_of<UnknownClass, T>::value, T*&>
+		_self()
+		{
+			static T* o = nullptr;
+			return o;
+		};
+
 	protected:
-		UnknownClass() {}
+		UnknownClass() = default;
 
 		TypeInfo m_typeinfo;
 
-		// saves and returns the current object
-		template<typename T> static T*& _unknownClass(){
-			static T* obj = nullptr;
-			return obj;
-		};
-
-		// sets the current object
-		virtual void set() = 0;
-		virtual void Destructor() {};	// Destructor
-		//virtual void Constructor() {};	// Constructor
-		
-		template<class T, typename = enable_if_t<is_base_of<UnknownClass, T>::value> >
-		void updateTypeInfo(T* t)
+		// use self_save() instead.
+		template<typename T>
+		enable_if_t<is_base_of<UnknownClass, T>::value, void>
+		_self_save(T* obj)
 		{
-			if((UnknownClass*)t != this)
-				THROW_EXCEPTION(T, ": is not derivative of this object (UnknownClass)");
-			
-			m_typeinfo.set<RemovePointer(t)>();
+			assert((UnknownClass*)obj == this); // if it's false, something is very fishy....
+			_self<RemovePointer(obj)>() = obj;
 		}
 
+		// use self_update() instead.
+		template<typename T>
+		enable_if_t<is_base_of<UnknownClass, T>::value, void>
+		_self_update(T* obj)
+		{
+			assert((UnknownClass*)obj == this); // if it's false, something is very fishy....
+			m_typeinfo.set<RemovePointer(obj)>();
+		}
+
+		virtual void self_save() = 0; 	// saves itself
+		virtual void self_update() = 0; // updates itself
+		virtual void Destructor() {};	// Destructor
+		virtual void Constructor() {};	// Constructor
+
 	public:
+		virtual ~UnknownClass() { Destructor(); }; // Destructor
+
 		virtual TypeInfo getTypeInfo() { return m_typeinfo; };
 		virtual string to_str() { return "(Unknown Class)"; };
 	
 		// returns current object, thread secure
-		template<typename T> T* reconvert(){
+		template<typename T>
+		enable_if_t<is_base_of<UnknownClass, T>::value, T*>
+		self_restore()
+		{
 			lock_guard_mutex guard(_mutex());
-			set();
-			T*& uobj = _unknownClass<T>();
-			T* obj = uobj;
-			uobj = nullptr;
-			return obj;
+			self_save();
+			auto& obj_ref = _self<T>();
+			auto* obj_ptr = obj_ref;
+			obj_ref = nullptr;
+			return obj_ptr;
 		};
-
-		virtual ~UnknownClass() { Destructor(); }; // Destructor
 	};
 };
 
