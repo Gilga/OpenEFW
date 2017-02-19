@@ -1,5 +1,5 @@
 # OpenEFW
-Open Extendable Framework - aims to be extendable, universal and simple
+Open Extendable Framework - extendable and universal
 
 ## Experimental State
 I don't recommend to use this now i am still experimenting with it.
