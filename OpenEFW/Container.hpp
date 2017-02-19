@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Mario Link
+ * Copyright (c) 2017, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,8 @@ namespace OpenEFW
 	public:
 		using This = Container<>;
 
-		template<typename T> Container<T>* cast(){
+		template<typename T> Container<T>* cast()
+		{
 			using C = Container<T>;
 			if (m_typeinfo.hash_code() != TypeInfo::Get<C>::hash_code()) return nullptr;
 			return static_cast<C*>(this);
@@ -62,9 +63,6 @@ namespace OpenEFW
 	template<typename T> class Container<T> : public Container<>
 	{
 		SetUnknownClass
-		
-	private:
-		void default() { updateTypeInfo(this); };
 
 	public:
 		using Type = T;
@@ -72,7 +70,7 @@ namespace OpenEFW
 		using Super = Container<>;
 
 		template<typename ...Args>
-		Container(Args... args) : value(Type(forward<Args>(args)...)) { default(); }
+		Container(Args... args) : value(Type(forward<Args>(args)...)) { self_update(); }
 		
 		Type value;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Mario Link
+ * Copyright (c) 2017, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -59,16 +59,16 @@ namespace OpenEFW
 
 		Id getID(const Type& obj){
 			for (auto &e : m_map) if(getContent(e.second) == obj) return e.first;
-			OpenEFW_EXCEPTION(This, "getID() = not found!");
+			THROW_EXCEPTION(This, "getID() = not found!");
 		}
 
 	public:
 		ExtendedMap() {}
 		~ExtendedMap() { clear(); }
 
-		This& operator=(const This &other){ m_map = other.m_map; return *this; };
+		This& operator=(const This &other){ copy(other); return *this; };
 
-		Map& source() { return m_map; };
+		virtual void copy(const This& other) { m_map = other.m_map; }
 
 		size_t size() const { return m_map.size(); };
 
@@ -76,7 +76,8 @@ namespace OpenEFW
 
 		bool has(Id id){ return m_map.find(id) != m_map.end(); }
 
-		template<typename Class = T, typename ...Args> bool create(Id id, Args... args)
+		template<typename Class = T, typename ...Args>
+		bool create(Id id, Args... args)
 		{
 			if (!is_convertible<Class*, Type>::value) THROW_EXCEPTION(This, "create(!is_convertible)");
 			if (!has(id)) { m_map.insert(Pair(id, createValue(id, new Class(forward<Args>(args)...)))); return true; }
