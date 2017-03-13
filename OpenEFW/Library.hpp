@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Mario Link
+ * Copyright (c) 2017, Mario Link
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -38,32 +38,40 @@ namespace OpenEFW
 {
 	using Versions = VersionSet<size_t>;
 
-	template<typename T>
+	template<typename LibT>
 	struct Library
 	{
-		using Type = T;
+		using LibraryType = LibT;
+		using Type = Component;
+		using This = Type*;
 
-		Component pkg;
+		static void init(This);
 
-		Library()
+		static auto create(const string &pname)
 		{
-			using Lib = Library<T>;
-			using This = Component*;
+			shared_ptr<Component> ptr(new Component());
 
-			auto& versions = pkg.add<Versions>("versions");
-			auto& name = pkg.add<string>("name");
+			ptr->setID(TypeInfo::Get<Library<LibT>>::to_str());
 
-			pkg.add("version", [&](This, Versions::List list) { versions.set(list); });
-			pkg.add("version", [&](This, size_t version) { return versions.has(version); });
-			pkg.add("version", [&](This, size_t version) { versions.use() = version; });
-			pkg.add("version", [&](This, bool exceptionOnFail = false)  // check current version of library
+			auto& versions = ptr->add<Versions>("versions");
+			auto& name = ptr->add<string>("name");
+			name = pname;
+
+			ptr->add("version", [&](This, Versions::List list) { versions.set(list); });
+			ptr->add("version", [&](This, size_t version) { return versions.has(version); });
+			ptr->add("version", [&](This, size_t version) { versions.use() = version; });
+			ptr->add("version", [&](This c, bool exceptionOnFail = false)  // check current version of library
 			{
 				bool has = versions.is_available();
 				if (!has && exceptionOnFail)
-					THROW_EXCEPTION(Versions, "Version " + to_string(versions.use()) + " is not available for library " + TypeInfo::Get<Lib>::to_str());
+					THROW_EXCEPTION(Versions, "Version " + to_string(versions.use()) + " is not available for library " + c->to_str()) + "(" + name + ")";
 				return has;
 			});
-		};
+
+			init(ptr.get());
+
+			return ptr;
+		}
 	};
 };
 

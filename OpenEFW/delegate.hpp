@@ -74,8 +74,28 @@ namespace OpenEFW
 			return nullptr;
 		}
 
+		template<typename T>
+		static auto get(T && f) { return Get<T>::type(f); };
 
-		template<typename T> static auto get(T && f) { return Get<T>::type(f); };
+		template <typename R, typename ...A, class C>
+		static auto get(C* const object_ptr, R(C::* const method_ptr)(A...)) {
+			return Delegate<R(A...)>(object_ptr, method_ptr);
+		}
+
+		template <typename R, typename ...A, class C>
+		static auto get(C* const object_ptr, R(C::* const method_ptr)(A...) const) {
+			return Delegate<R(A...)>(object_ptr, method_ptr);
+		}
+
+		template <typename R, typename ...A, class C>
+		static auto get(C& object, R(C::* const method_ptr)(A...)) {
+			return Delegate<R(A...)>(object, method_ptr);
+		}
+
+		template <typename R, typename ...A, class C>
+		static auto get(C const& object, R(C::* const method_ptr)(A...) const) {
+			return Delegate<R(A...)>(object, method_ptr);
+		}
 
 		template <typename ...T> class extract;
 

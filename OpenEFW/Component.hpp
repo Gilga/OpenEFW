@@ -98,24 +98,89 @@ namespace OpenEFW
 			IDType getID() { return k.to_str(); }
 		};
 
-		template<typename T>
-		class ReturnValue
+		template<typename ...> class ReturnValue {};
+		template<bool B, typename T = void> class RVal {};
+
+		template<typename T> class RVal<false, T> {
+		public:
+
+			bool operator==(bool const& b) { return false == b; }
+			bool operator!=(bool const& b) { return false != b; }
+
+			explicit operator bool() { return false; }
+
+			template<typename T> bool operator()(T&, bool set = false) { return false; }
+		};
+
+		template<> class ReturnValue<> : public RVal<false> {};
+
+		template<typename T> class RVal<true, T>
 		{
-			T* value = nullptr;
+			bool m_valid = false;
+			T m_value;
 
 		public:
-			bool isEmpty() { return (value == nullptr); }
 
-			bool operator==(bool const& b) { return !isEmpty() == b; }
-			bool operator!=(bool const& b) { return !isEmpty() != b; }
+			bool operator==(bool const& b) { return m_valid == b; }
+			bool operator!=(bool const& b) { return m_valid != b; }
 
-			explicit operator bool() { return value != nullptr; }
+			explicit operator bool() { return m_valid; }
 
-			T& operator*() { return *value; }
-			T& get() { return *value; }
+			bool operator()(T& v, bool set = false) {
+				if (set) { m_value = v; m_valid = true; }
+				if(m_valid) v = m_value;
+				return m_valid;
+			}
 		};
-		
-		//template<typename T> Key key(ParamID id) { return Key::create<T>(id); }
+
+		template<typename T> class ReturnValue<T> : public RVal<!is_same<T, void>::value, T> {};
+
+		template<typename T> class ReturnPointer
+		{
+			T* m_value = nullptr;
+			bool valid() { return m_value == nullptr; }
+
+		public:
+
+			bool operator==(bool const& b) { return valid() == b; }
+			bool operator!=(bool const& b) { return valid() != b; }
+
+			explicit operator bool() { return valid(); }
+
+			bool operator()(T& v, bool set = false) {
+				bool m_valid = false;
+				if (set) m_value = &v;
+				else {
+					m_valid = valid();
+					if (m_valid) v = m_value;
+				}
+				return m_valid;
+			}
+		};
+
+		template<bool _Test, typename R = void> struct CCall {};
+
+		template<typename R> struct CCall<false, R>
+		{
+			template<typename T, typename ...A>	static auto call(T* e, A... args)
+			{
+				if (e) (*e)(forward<A>(args)...);
+				return ReturnValue<>();
+			}
+		};
+		template<typename R> struct CCall<true, R>
+		{
+			template<typename T, typename ...A>	static auto call(T* e, A... args)
+			{
+				ReturnValue<R> r;
+				if (e) { R v = ((*e)(forward<A>(args)...)); r(v, true); }
+				return r;
+			}
+		};
+
+		template<typename R> struct Call : public CCall<!is_same<R, void>::value, R> {};
+
+		template<typename T> Key key(ParamID id) { return Key::create<type_convert<T>>(id);	}
 
 		template<typename T>
 		enable_if_t<!is_same<This, typename decay<T>::type>::value, void>
@@ -187,8 +252,6 @@ namespace OpenEFW
 		}
 
 	public:
-		~Component() { ~(*this); };
-
 		enum class LIST { VALUES, FUNCTIONS, COMPONENTS, ALL };
 
 		Lists& getList(LIST id)
@@ -239,12 +302,6 @@ namespace OpenEFW
 		// ------------------------------
 
 		template<typename T>
-		Key key(ParamID id)
-		{
-			return Key::create<type_convert<T>>(id);
-		}
-
-		template<typename T>
 		bool del(ParamID id)
 		{
 			auto& l = list<T>();
@@ -289,6 +346,22 @@ namespace OpenEFW
 		}
 
 		template<typename T>
+		void get(ParamID id, T& out)
+		{
+			auto r = *ListEntry<T>(this, id);
+			if (!r) ThrowNotExist(CompType);
+			out = *r;
+		}
+
+		template<typename _T, typename T = type_convert<_T>>
+		ReturnPointer<T> get_silent(ParamID id)
+		{
+			auto r = *ListEntry<_T>(this, id);
+			if (r) return{ &(*r) };
+			return {};
+		};
+
+		template<typename T>
 		bool replace(ParamID id, T& value)
 		{
 			return replace(id, id, value);
@@ -330,68 +403,65 @@ namespace OpenEFW
 		// ------------------------------
 
 		// call with "this" parameter 
-		template<typename R = void, typename ...A, typename T = R(This*, A...)>
+		template<typename R = void, typename ...A>
 		R self(ParamID id, A... args)
 		{
-			auto r = *ListEntry<T>(this, id);
-			if (!r) ThrowNotExist(CompType);
-			return (*r)(this, forward<A>(args)...);
+			using T = R(This*, A...);
+			auto e = *ListEntry<T>(this, id);
+			if (!e) ThrowNotExist(CompType);
+			return (*e)(this, forward<A>(args)...);
 		};
 
 		// call in silent mode: does not break if function was not found.
 		// call without "this" parameter 
-		template<typename R = void, typename ...A, typename T = R(This*, A...)>
-		ReturnValue<typename ListEntry<T>::Type>
-		self_silent(ParamID id, A... args)
+		template<typename R = void, typename ...A>
+		auto self_silent(ParamID id, A... args)
 		{
-			auto r = *ListEntry<T>(this, id);
-			if (r) return { &(*r)(this, forward<A>(args)...) };
-			return {};
+			return Call<R>::call(*ListEntry<R(This*, A...)>(this, id), this, forward<A>(args)...);
 		};
 
 		// call without "this" parameter 
-		template<typename R = void, typename ...A, typename T = R(A...)>
+		template<typename R = void, typename ...A>
 		R call(ParamID id, A... args)
 		{
-			auto r = *ListEntry<T>(this, id);
-			if(!r) ThrowNotExist(CompType);
-			return (*r)(forward<A>(args)...);
+			using T = R(A...);
+			auto e = *ListEntry<T>(this, id);
+			if(!e) ThrowNotExist(CompType);
+			return (*e)(forward<A>(args)...);
 		};
 
 		// call in silent mode: does not break if function was not found.
 		// call without "this" parameter 
-		template<typename R = void, typename ...A, typename T = R(A...)>
-		ReturnValue<typename ListEntry<R(A...)>::Type>
-		call_silent(ParamID id, A... args)
+		template<typename R = void, typename ...A>
+		auto call_silent(ParamID id, A... args)
 		{
-			auto r = *ListEntry<T>(this, id);
-			if(r) return { &(*r)(forward<A>(args)...) };
-			return {};
+			return Call<R>::call(*ListEntry<R(A...)>(this, id), forward<A>(args)...);
 		};
 
 		template<typename R = void, typename ...A>
 		R invoke_self(ParamID comp_id, ParamID id, A... args)
 		{
-			auto r = *ListEntry<This>(this, comp_id);
-			if (!r) ThrowNotExist(CompType);
-			return (*r).self<R>(id, forward<A>(args)...);
+			auto e = *ListEntry<This>(this, comp_id);
+			if (!e) ThrowNotExist(CompType);
+			return (*e).self<R>(id, forward<A>(args)...);
 		}
 
 		// call in silent mode: does not break if function was not found.
 		template<typename R = void, typename ...A>
-		ReturnValue<This> invoke_self_silent(ParamID comp_id, ParamID id, A... args)
+		auto invoke_self_silent(ParamID comp_id, ParamID id, A... args)
 		{
-			auto r = *ListEntry<This>(this, comp_id);
-			if (r) return{ &(*r).self_silent<R>(id, forward<A>(args)...) };
-			return{};
+			using T = This;
+			auto e = *ListEntry<T>(this, comp_id);
+			if (!e) return ReturnValue<>();
+			return (*e).self_silent<R>(id, forward<A>(args)...);
 		}
 
 		template<typename R = void, typename ...A>
 		R invoke(ParamID comp_id, ParamID id, A... args)
 		{
-			auto r = *ListEntry<This>(this, comp_id);
-			if (!r) ThrowNotExist(CompType);
-			return (*r).call<R>(id, forward<A>(args)...);
+			auto e = *ListEntry<This>(this, comp_id);
+			if (!e) ThrowNotExist(CompType);
+			return (*e).call<R>(id, forward<A>(args)...);
 		}
 
 		// call in silent mode: does not break if function was not found.
@@ -459,6 +529,7 @@ namespace OpenEFW
 		This& operator=(const Arguments<const char*, T>& in)
 		{ replace(string(in.a1), in.a2); return *this; };
 	
+		~Component() { destroy(); };
 		void operator~() { destroy(); };
 		void operator()() { create(); };
 
@@ -493,7 +564,8 @@ namespace OpenEFW
 
 		void create()
 		{
-			if (!m_created && has<void(This*)>("@create")) {
+			if (!m_created && has<void(This*)>("@create"))
+			{
 				m_created = true;
 				self("@create");
 			}
@@ -501,7 +573,8 @@ namespace OpenEFW
 
 		void destroy()
 		{
-			if (m_created && has<void(This*)>("@delete")) {
+			if (m_created && has<void(This*)>("@delete"))
+			{
 				self("@delete");
 				m_created = false;
 			}
