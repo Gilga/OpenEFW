@@ -28,7 +28,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*
-	This class is custom invention of a replacement for std::function.
+	This class is a custom invention of a replacement for std::function.
 	Inspiration taken from different sources:
 	http://codereview.stackexchange.com/questions/14730/impossibly-fast-delegate-in-c11
 	http://www.codeproject.com/Articles/11015/The-Impossibly-Fast-C-Delegates
